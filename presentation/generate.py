@@ -28,9 +28,6 @@ coverage across Inter / Helvetica Neue / Calibri / system defaults:
     ->          U+2192  right arrow
     *           bullet  (we use "-" instead)
     YES / NO    plain words instead of check/ballot
-    U+2714 / U+2718  check / ballot — used sparingly, only where
-                     surrounding text is clearly labelled so a missing
-                     glyph still reads.
 
 The play triangle U+25B6 is REPLACED with the text "LIVE DEMO ->" to
 avoid glyph fallback boxes on default installs.
@@ -70,7 +67,7 @@ CODE_FONT = "JetBrains Mono"
 SLIDE_W = Inches(13.333)
 SLIDE_H = Inches(7.5)
 MARGIN  = Inches(0.6)
-TOTAL_SLIDES = 11
+TOTAL_SLIDES = 9
 
 # Safe unicode we actually use
 ARROW = "\u2192"   # ->  right arrow, nearly universal
@@ -351,7 +348,7 @@ def slide_1_title(prs):
         slide,
         Inches(0.9), Inches(4.85),
         Inches(12.0), Inches(0.5),
-        "Eight minutes on how a single zk-SNARK turns a game of hidden state into a trustless one.",
+        "A zk-SNARK demo with real on-chain verification.",
         font=BODY_FONT, size=18, bold=False, color=MUTED,
     )
 
@@ -377,7 +374,7 @@ def slide_1_title(prs):
         slide,
         SLIDE_W - MARGIN - Inches(4.5), Inches(6.12),
         Inches(4.5), Inches(0.3),
-        f"noir {ARROW} ultraplonk {ARROW} solidity",
+        f"noir {ARROW} ultrahonk {ARROW} solidity",
         font=CODE_FONT, size=11, bold=False, color=MUTED,
         align=PP_ALIGN.RIGHT,
     )
@@ -387,15 +384,14 @@ def slide_1_title(prs):
     notes = """\
 [Pranav]
 Welcome everyone. I'm Pranav Pabba and this is my teammate Vikram Akkala. Over the next eight \
-minutes we're going to show you Battleship -- the classic two-player board game -- reimagined \
-with zero-knowledge proofs. I'll drive the demo at the end; Vikram is going to carry you \
-through the cryptography in the middle. By the time we're done you'll understand exactly why \
-a naive commitment scheme fails, how Merkle trees get you most of the way, and why a single \
-zk-SNARK is the piece that actually closes the gap.
+minutes we're going to show you Battleship -- the classic two-player board game -- rebuilt on \
+zero-knowledge proofs with real on-chain verification. I'll drive the live demo; Vikram will \
+carry you through the cryptography. By the time we're done you'll see exactly why a simple \
+hash commitment fails, and why a single zk-SNARK is the piece that closes the gap.
 
 [Vikram]
-Thanks Pranav. My job is the crypto -- the problem framing, the Merkle deep-dive, and the \
-zk-SNARK reveal. I promise to keep it concrete and tied to Battleship the whole way. Let's go.
+Thanks Pranav. My job is the crypto -- the problem, the gap, and the fix. Concrete and tied to \
+Battleship the whole way. Let's go.
 """
     set_notes(slide, notes)
     return slide
@@ -412,20 +408,20 @@ def slide_2_problem(prs):
 
     add_text(
         slide,
-        MARGIN, Inches(2.6),
+        MARGIN, Inches(2.55),
         Inches(1.2), Inches(2.0),
         "\u201C",
         font=BODY_FONT, size=180, bold=True, color=ORANGE,
     )
 
-    tb = slide.shapes.add_textbox(Inches(1.9), Inches(3.05),
+    tb = slide.shapes.add_textbox(Inches(1.9), Inches(3.0),
                                   Inches(10.9), Inches(2.6))
     tf = tb.text_frame
     tf.word_wrap = True
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
     for i, line in enumerate([
-        "How do you prove your board",
-        f"is legal{MDASH}without revealing it?",
+        "Each player knows their board.",
+        "Neither player trusts the other.",
     ]):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = PP_ALIGN.LEFT
@@ -433,7 +429,7 @@ def slide_2_problem(prs):
         r = p.add_run()
         r.text = line
         r.font.name = BODY_FONT
-        r.font.size = Pt(42)
+        r.font.size = Pt(38)
         r.font.bold = True
         r.font.color.rgb = TEXT if i == 0 else ORANGE
 
@@ -441,156 +437,44 @@ def slide_2_problem(prs):
         slide,
         Inches(1.9), Inches(5.55),
         Inches(10.9), Inches(0.4),
-        f"{MDASH} the central cryptographic puzzle",
+        f"{MDASH} standard trick: commit to your board with a hash so you can't change your mind later.",
+        font=BODY_FONT, size=14, bold=False, color=MUTED,
+    )
+    add_text(
+        slide,
+        Inches(1.9), Inches(5.95),
+        Inches(10.9), Inches(0.4),
+        "But a hash commitment only proves WHAT you committed to -- not whether what you committed is legal.",
         font=BODY_FONT, size=14, bold=False, color=MUTED,
     )
 
     notes = """\
 [Vikram]
-Battleship is a game of hidden information. I place ships on my private board, you place ships \
-on yours, and neither of us sees the other's grid. That's fine when we're sitting across a \
-table with cardboard pegs -- but in a digital implementation, nothing stops me from just \
-lying. I can claim every one of your shots is a miss and coast to victory. The rules don't \
-enforce themselves. So we need a way for me to commit to a board up front, prove that board is \
-a legal fleet, and then answer each of your shots honestly -- all without ever showing you \
-where my ships actually are. That is the central cryptographic puzzle of this talk.
-
-[Pranav]
-Keep this puzzle in your head -- every slide from here on is chipping away at it.
+Battleship is a game of hidden state. I place ships on my private ten-by-ten grid, you place \
+ships on yours, and neither of us sees the other's layout. In a digital implementation nothing \
+stops me from just lying about my board. So the standard cryptographic move is: commit to your \
+board up front with a hash. Publish that hash on-chain, and now you can't silently change your \
+ships mid-game. Great. But here's the catch -- and this is what the next slide is about -- a \
+hash commitment only proves WHAT you committed to. It says absolutely nothing about whether \
+what you committed is a legal fleet in the first place.
 """
     set_notes(slide, notes)
     return slide
 
 
 # ===========================================================================
-# Slide 3 — Merkle 101
+# Slide 3 — The Validity Gap
 # ===========================================================================
 
-def slide_3_merkle_101(prs):
+def slide_3_validity_gap(prs):
     slide = blank_slide(prs)
-    chrome(slide, 3, eyebrow=f"02  {MIDOT}  Merkle 101",
-           title="A Merkle tree, in one picture.")
+    chrome(slide, 3, eyebrow=f"02  {MIDOT}  The Validity Gap",
+           title="Commit to nothing. Win anyway.")
 
-    # Draw a small 4-leaf tree on the left
-    tree_l = MARGIN
-    tree_t = Inches(2.6)
-    tree_w = Inches(6.8)
-    tree_h = Inches(3.9)
-
-    add_round_rect(slide, tree_l, tree_t, tree_w, tree_h,
-                   fill_color=SURFACE, line_color=HAIRLINE,
-                   line_width=Pt(1), corner=0.06)
-
-    # Root
-    root_cx = tree_l + tree_w / 2
-    root_cy = tree_t + Inches(0.55)
-    node_w  = Inches(1.6)
-    node_h  = Inches(0.45)
-    add_round_rect(slide, root_cx - node_w / 2, root_cy,
-                   node_w, node_h,
-                   fill_color=ORANGE, line_color=ORANGE, corner=0.4)
-    add_text(slide, root_cx - node_w / 2, root_cy + Inches(0.05),
-             node_w, node_h, "ROOT",
-             font=BODY_FONT, size=13, bold=True, color=BG,
-             align=PP_ALIGN.CENTER)
-
-    # Level 1 — two nodes
-    l1_y = tree_t + Inches(1.4)
-    l1_cx_left  = tree_l + tree_w * 0.3
-    l1_cx_right = tree_l + tree_w * 0.7
-    for cx, label in [(l1_cx_left, "H(AB)"), (l1_cx_right, "H(CD)")]:
-        add_round_rect(slide, cx - node_w / 2, l1_y,
-                       node_w, node_h,
-                       fill_color=SURFACE_HI, line_color=HAIRLINE, corner=0.4)
-        add_text(slide, cx - node_w / 2, l1_y + Inches(0.05),
-                 node_w, node_h, label,
-                 font=CODE_FONT, size=12, bold=True, color=TEXT,
-                 align=PP_ALIGN.CENTER)
-
-    # Level 2 — 4 leaves
-    l2_y = tree_t + Inches(2.35)
-    leaf_cxs = [tree_l + tree_w * f for f in (0.15, 0.38, 0.62, 0.85)]
-    leaf_labels = ["cell A", "cell B", "cell C", "cell D"]
-    for cx, label in zip(leaf_cxs, leaf_labels):
-        add_round_rect(slide, cx - Inches(0.65), l2_y,
-                       Inches(1.3), Inches(0.45),
-                       fill_color=BG, line_color=CYAN, corner=0.4)
-        add_text(slide, cx - Inches(0.65), l2_y + Inches(0.05),
-                 Inches(1.3), Inches(0.45), label,
-                 font=CODE_FONT, size=11, bold=True, color=CYAN,
-                 align=PP_ALIGN.CENTER)
-
-    # Connector lines (approximate — use thin rectangles as stems)
-    def stem(x1, y1, x2, y2):
-        add_arrow(slide, x1, y1, x2, y2, color=HAIRLINE)
-
-    stem(int(l1_cx_left),  int(l1_y), int(root_cx), int(root_cy + node_h))
-    stem(int(l1_cx_right), int(l1_y), int(root_cx), int(root_cy + node_h))
-    stem(int(leaf_cxs[0]), int(l2_y), int(l1_cx_left),  int(l1_y + node_h))
-    stem(int(leaf_cxs[1]), int(l2_y), int(l1_cx_left),  int(l1_y + node_h))
-    stem(int(leaf_cxs[2]), int(l2_y), int(l1_cx_right), int(l1_y + node_h))
-    stem(int(leaf_cxs[3]), int(l2_y), int(l1_cx_right), int(l1_y + node_h))
-
-    # Caption under the tree
-    add_text(slide, tree_l + Inches(0.3), tree_t + Inches(3.1),
-             tree_w - Inches(0.6), Inches(0.6),
-             "Hash pairs up the tree. The root fingerprints every leaf.",
-             font=BODY_FONT, size=13, bold=False, color=MUTED,
-             align=PP_ALIGN.CENTER)
-
-    # Right column — the core property
-    right_l = tree_l + tree_w + Inches(0.4)
-    right_w = SLIDE_W - right_l - MARGIN
-
-    add_text(slide, right_l, tree_t + Inches(0.1),
-             right_w, Inches(0.4),
-             "THE CORE PROPERTY",
-             font=BODY_FONT, size=11, bold=True, color=CYAN, tracking=250)
-
-    add_text(slide, right_l, tree_t + Inches(0.5),
-             right_w, Inches(0.7),
-             "One root commits to every leaf.",
-             font=BODY_FONT, size=22, bold=True, color=TEXT)
-
-    props = [
-        (f"{ARROW}", "Publish only the root on-chain."),
-        (f"{ARROW}", "Reveal any one leaf with a short path."),
-        (f"{ARROW}", "The root cannot be forged later."),
-        (f"{ARROW}", "100 cells means ~7 hashes per proof."),
-    ]
-    _draw_bullets(slide, props, right_l, tree_t + Inches(1.4),
-                  right_w, mark_color=ORANGE, text_color=TEXT)
-
-    notes = """\
-[Vikram]
-Before we get to the zk-SNARK I want to make sure everyone has Merkle trees in their head, \
-because this is the piece of the talk that actually ties the cryptography to Battleship. A \
-Merkle tree is what you get when you take a list of values, hash them in pairs, then hash those \
-hashes in pairs, and keep going until you collapse the whole thing into a single hash at the \
-top. That top hash is the root. The magic property is this: the root is a fingerprint of every \
-single leaf at once. If I change any leaf, even one bit, the root changes. So if I publish just \
-the root, I have committed to the entire list without revealing any of it. Later, I can prove \
-"leaf number 37 was X" by handing you X plus about log-base-two-of-a-hundred -- so seven -- \
-sibling hashes along the path. You hash your way back up to the root and check it matches. \
-That is it. Every blockchain you have ever heard of uses this trick.
-"""
-    set_notes(slide, notes)
-    return slide
-
-
-# ===========================================================================
-# Slide 4 — Merkle in Battleship
-# ===========================================================================
-
-def slide_4_merkle_battleship(prs):
-    slide = blank_slide(prs)
-    chrome(slide, 4, eyebrow=f"03  {MIDOT}  Merkle in Battleship",
-           title="Every cell is a leaf.")
-
-    # Left: a 10x10 mini grid with a couple of shaded cells
+    # Left: a 10x10 mini grid — deliberately EMPTY
     grid_l = MARGIN
-    grid_t = Inches(2.55)
-    grid_side = Inches(3.9)
+    grid_t = Inches(2.6)
+    grid_side = Inches(3.7)
     cell = grid_side / 10
 
     add_round_rect(slide, grid_l - Inches(0.15), grid_t - Inches(0.15),
@@ -598,210 +482,180 @@ def slide_4_merkle_battleship(prs):
                    fill_color=SURFACE, line_color=HAIRLINE,
                    line_width=Pt(1), corner=0.05)
 
-    ship_cells = {(1, 2), (2, 2), (3, 2), (5, 6), (5, 7)}
     for r in range(10):
         for c in range(10):
             x = grid_l + cell * c
             y = grid_t + cell * r
-            fill = ORANGE if (c, r) in ship_cells else BG
             add_rect(slide, x, y, cell, cell,
-                     fill_color=fill, line_color=HAIRLINE,
+                     fill_color=BG, line_color=HAIRLINE,
                      line_width=Pt(0.5))
 
-    add_text(slide, grid_l, grid_t + grid_side + Inches(0.15),
+    add_text(slide, grid_l, grid_t + grid_side + Inches(0.2),
              grid_side, Inches(0.4),
-             "100 cells = 100 leaves",
-             font=BODY_FONT, size=12, bold=True, color=MUTED,
+             "ALL-EMPTY BOARD",
+             font=BODY_FONT, size=11, bold=True, color=WARN,
+             align=PP_ALIGN.CENTER, tracking=250)
+    add_text(slide, grid_l, grid_t + grid_side + Inches(0.55),
+             grid_side, Inches(0.4),
+             "hash(empty, salt) is still valid",
+             font=CODE_FONT, size=10, bold=False, color=MUTED,
              align=PP_ALIGN.CENTER)
 
-    # Right column — leaf + commit + shot-response steps
+    # Right: the cheat narrative
     right_l = grid_l + grid_side + Inches(0.7)
     right_w = SLIDE_W - right_l - MARGIN
 
     add_text(slide, right_l, grid_t - Inches(0.05),
              right_w, Inches(0.4),
-             "THE RECIPE",
-             font=BODY_FONT, size=11, bold=True, color=CYAN, tracking=250)
-
-    # Step blocks
-    steps = [
-        ("LEAF",
-         "leaf_i = hash(cellIndex, occupied, salt_i)"),
-        ("COMMIT",
-         "publish merkle_root(leaves[0..100]) on-chain"),
-        ("SHOT",
-         "opponent fires at (x, y)"),
-        ("RESPOND",
-         "reveal leaf and 7-hash path under root"),
-        ("VERIFY",
-         "contract recomputes root -> accepts hit/miss"),
-    ]
-    sy = grid_t + Inches(0.45)
-    for i, (label, body) in enumerate(steps):
-        y = sy + Inches(0.55) * i
-        add_round_rect(slide, right_l, y, Inches(1.15), Inches(0.38),
-                       fill_color=SURFACE, line_color=HAIRLINE, corner=0.3)
-        add_text(slide, right_l, y + Inches(0.05),
-                 Inches(1.15), Inches(0.35),
-                 label,
-                 font=CODE_FONT, size=10, bold=True, color=ORANGE,
-                 align=PP_ALIGN.CENTER, tracking=150)
-        add_text(slide, right_l + Inches(1.3), y + Inches(0.04),
-                 right_w - Inches(1.3), Inches(0.4),
-                 body,
-                 font=CODE_FONT, size=12, bold=False, color=TEXT)
-
-    notes = """\
-[Vikram]
-Now let us plug this into Battleship. Each of my 100 cells becomes a leaf. The leaf is a hash \
-of three things: the cell's index zero through ninety-nine, a bit saying whether it's occupied, \
-and a random salt so you can't brute-force guess it. I build the Merkle tree over those 100 \
-leaves, and I send you the root. That is my commitment. Now you fire a shot at coordinate \
-three-comma-five. I look up leaf number thirty-five, tell you the occupied bit, and hand you \
-the seven sibling hashes that form the Merkle path. You hash it back up to my root and check. \
-If the root matches, you know I'm not making up the answer -- that cell really was whatever I \
-said it was when I committed. And crucially, I never had to show you the other 99 cells. This \
-is the exact scheme the original Battleship contract in this repo used. It works. It's pretty. \
-It feels like we're done. But we are not done.
-"""
-    set_notes(slide, notes)
-    return slide
-
-
-# ===========================================================================
-# Slide 5 — The Merkle Hole (pivot)
-# ===========================================================================
-
-def slide_5_merkle_hole(prs):
-    slide = blank_slide(prs)
-    chrome(slide, 5, eyebrow=f"04  {MIDOT}  The Merkle Hole",
-           title="What Merkle cannot prove.")
-
-    col_top = Inches(2.55)
-    col_h   = Inches(3.4)
-    gap     = Inches(0.4)
-    col_w   = (SLIDE_W - MARGIN * 2 - gap) / 2
-
-    # Left: what Merkle proves
-    left_l = MARGIN
-    add_round_rect(slide, left_l, col_top, col_w, col_h,
-                   fill_color=SURFACE, line_color=HAIRLINE,
-                   line_width=Pt(1), corner=0.08)
-    add_text(slide, left_l + Inches(0.4), col_top + Inches(0.3),
-             col_w - Inches(0.8), Inches(0.4),
-             "MERKLE PROVES",
-             font=BODY_FONT, size=11, bold=True, color=CYAN, tracking=250)
-    add_text(slide, left_l + Inches(0.4), col_top + Inches(0.7),
-             col_w - Inches(0.8), Inches(0.55),
-             "Consistency.",
-             font=BODY_FONT, size=26, bold=True, color=TEXT)
-    left_bullets = [
-        ("YES", "You committed to 100 values."),
-        ("YES", "You cannot change them later."),
-        ("YES", "Any single reveal is honest."),
-    ]
-    _draw_bullets(slide, left_bullets, left_l + Inches(0.4),
-                  col_top + Inches(1.55), col_w - Inches(0.8),
-                  mark_color=GOOD, text_color=TEXT)
-
-    # Right: what Merkle does NOT prove
-    right_l = left_l + col_w + gap
-    add_round_rect(slide, right_l, col_top, col_w, col_h,
-                   fill_color=RGBColor(0x2A, 0x18, 0x20),
-                   line_color=RGBColor(0x5A, 0x29, 0x33),
-                   line_width=Pt(1), corner=0.08)
-    add_text(slide, right_l + Inches(0.4), col_top + Inches(0.3),
-             col_w - Inches(0.8), Inches(0.4),
-             "MERKLE CANNOT PROVE",
+             "THE CHEAT",
              font=BODY_FONT, size=11, bold=True, color=WARN, tracking=250)
-    add_text(slide, right_l + Inches(0.4), col_top + Inches(0.7),
-             col_w - Inches(0.8), Inches(0.55),
-             "Legality.",
-             font=BODY_FONT, size=26, bold=True, color=WARN)
-    right_bullets = [
-        ("NO", "That the 100 values form a real fleet."),
-        ("NO", "No overlaps, no diagonals, correct shapes."),
-        ("NO", "Deferred reveal arrives too late."),
-    ]
-    _draw_bullets(slide, right_bullets, right_l + Inches(0.4),
-                  col_top + Inches(1.55), col_w - Inches(0.8),
-                  mark_color=WARN, text_color=TEXT)
 
-    # The attack callout — full width, bottom
-    callout_t = Inches(6.2)
-    add_round_rect(slide, MARGIN, callout_t, SLIDE_W - MARGIN * 2,
-                   Inches(0.85),
-                   fill_color=RGBColor(0x33, 0x1A, 0x0B),
-                   line_color=ORANGE, line_width=Pt(1.25), corner=0.25)
-    add_text(slide, MARGIN + Inches(0.3), callout_t + Inches(0.08),
-             SLIDE_W - MARGIN * 2 - Inches(0.6), Inches(0.4),
-             f"THE ATTACK   {ARROW}",
-             font=BODY_FONT, size=11, bold=True, color=ORANGE, tracking=250)
-    add_text(slide, MARGIN + Inches(0.3), callout_t + Inches(0.38),
-             SLIDE_W - MARGIN * 2 - Inches(0.6), Inches(0.45),
-             "Commit an all-empty board. Answer MISS to every shot. Win.",
-             font=CODE_FONT, size=14, bold=True, color=TEXT)
+    steps = [
+        ("1", "Commit to an all-empty board.",
+         "hash is valid. nothing in the scheme says you need ships."),
+        ("2", "Opponent fires at (3, 5).",
+         "you answer MISS. truthfully. there is nothing there."),
+        ("3", "Every shot is a miss.",
+         "you never lose a cell. you never take damage."),
+        ("4", "You win by elimination.",
+         "hash commitments alone cannot stop this."),
+    ]
+    sy = grid_t + Inches(0.5)
+    for i, (num, title, body) in enumerate(steps):
+        y = sy + Inches(0.85) * i
+        add_oval(slide, right_l, y + Inches(0.02),
+                 Inches(0.45), Inches(0.45),
+                 fill_color=WARN)
+        add_text(slide, right_l, y + Inches(0.03),
+                 Inches(0.45), Inches(0.45),
+                 num,
+                 font=BODY_FONT, size=16, bold=True, color=BG,
+                 align=PP_ALIGN.CENTER)
+        add_text(slide, right_l + Inches(0.7), y - Inches(0.01),
+                 right_w - Inches(0.7), Inches(0.45),
+                 title,
+                 font=BODY_FONT, size=17, bold=True, color=TEXT)
+        add_text(slide, right_l + Inches(0.7), y + Inches(0.4),
+                 right_w - Inches(0.7), Inches(0.4),
+                 body,
+                 font=BODY_FONT, size=12, bold=False, color=MUTED)
 
     notes = """\
 [Vikram]
-Here is the hole, and this is the pivot of the whole talk. A Merkle proof proves that I did not \
-change my mind about a cell after I committed. It proves consistency. What it absolutely does \
-not prove is that the thing I committed to in the first place was a legal Battleship fleet. \
-Nothing in a Merkle tree says "this has exactly one carrier, one battleship, two cruisers, one \
-destroyer, no overlaps, no diagonals." And now the exploit writes itself. I commit to an \
-all-empty ten-by-ten grid. That is a perfectly valid Merkle tree with a perfectly valid root. \
-You start firing at me and I honestly, Merkle-verifiably, answer MISS to every single one of \
-your shots -- because every cell really is empty. You never sink a ship, I never take damage, \
-and on the last turn I claim the win. The deferred "reveal at the end" check that's supposed to \
-catch this is theatre -- by the time we'd run it the game is already lost, and in the original \
-contract in this repo both branches of that check actually assign the same winner. So Merkle \
-alone is not enough. We need legality proven up front, before a single shot is fired. That is \
-where zk-SNARKs come in.
+Okay, feel this one. Imagine I'm the cheater. I commit to an all-empty board -- literally a \
+grid with zero ships on it. The hash of that board is a perfectly valid hash. On-chain, my \
+commitment looks identical to yours. The game starts. You fire at three-comma-five. I answer \
+MISS. Completely truthfully, because there is nothing there. You fire at seven-comma-two. MISS. \
+Again, not a lie. I never lose a single cell because I have no cells to lose. Meanwhile I'm \
+sinking your actual ships. I win by elimination without ever making a dishonest statement. \
+A plain hash commitment cannot stop this attack, because a hash only proves WHAT you committed \
+to -- it is silent on whether that thing is a legal Battleship fleet. This is the validity \
+gap, and every slide from here on is about closing it.
 """
     set_notes(slide, notes)
     return slide
 
 
 # ===========================================================================
-# Slide 6 — Enter zk-SNARKs
+# Slide 4 — The Fix: zk-SNARKs
 # ===========================================================================
 
-def slide_6_zksnarks(prs):
+def slide_4_fix(prs):
     slide = blank_slide(prs)
-    chrome(slide, 6, eyebrow=f"05  {MIDOT}  The primitive",
-           title="Enter zk-SNARKs.")
+    chrome(slide, 4, eyebrow=f"03  {MIDOT}  The Fix",
+           title="Prove legality, in zero knowledge.")
 
-    # Big idea line up top
-    add_text(slide, MARGIN, Inches(2.5),
-             SLIDE_W - MARGIN * 2, Inches(0.6),
-             "The proof IS the validity certificate.",
-             font=BODY_FONT, size=26, bold=True, color=ORANGE)
+    add_text(
+        slide, MARGIN, Inches(2.9),
+        SLIDE_W - MARGIN * 2, Inches(1.2),
+        "The proof IS the validity certificate.",
+        font=BODY_FONT, size=40, bold=True, color=ORANGE,
+        align=PP_ALIGN.CENTER,
+    )
 
-    add_text(slide, MARGIN, Inches(3.05),
-             SLIDE_W - MARGIN * 2, Inches(0.5),
-             "One proof, generated once at commit time, verified once on-chain.",
-             font=BODY_FONT, size=15, bold=False, color=MUTED)
+    add_text(
+        slide, MARGIN, Inches(4.25),
+        SLIDE_W - MARGIN * 2, Inches(0.5),
+        "One zk-SNARK, generated in the browser before the first shot.",
+        font=BODY_FONT, size=18, bold=False, color=TEXT,
+        align=PP_ALIGN.CENTER,
+    )
+    add_text(
+        slide, MARGIN, Inches(4.7),
+        SLIDE_W - MARGIN * 2, Inches(0.5),
+        "Verified once on-chain. No ship-count lies survive.",
+        font=BODY_FONT, size=18, bold=False, color=MUTED,
+        align=PP_ALIGN.CENTER,
+    )
 
-    # 2x2 tile grid — ASCII / english labels instead of math glyphs
-    grid_top = Inches(3.75)
-    grid_h   = Inches(2.9)
+    # Bottom constraint strip
+    strip_t = Inches(5.55)
+    add_round_rect(slide, MARGIN, strip_t, SLIDE_W - MARGIN * 2, Inches(1.1),
+                   fill_color=SURFACE, line_color=HAIRLINE,
+                   line_width=Pt(1), corner=0.18)
+    add_text(slide, MARGIN + Inches(0.35), strip_t + Inches(0.18),
+             SLIDE_W - MARGIN * 2 - Inches(0.7), Inches(0.35),
+             "THE FLEET CONSTRAINT",
+             font=BODY_FONT, size=10, bold=True, color=CYAN, tracking=250)
+    add_text(slide, MARGIN + Inches(0.35), strip_t + Inches(0.5),
+             SLIDE_W - MARGIN * 2 - Inches(0.7), Inches(0.5),
+             "17 cells  -  1x5  -  1x4  -  2x3  -  1x2  -  no overlaps  -  no diagonals",
+             font=CODE_FONT, size=13, bold=True, color=TEXT,
+             align=PP_ALIGN.CENTER)
+
+    notes = """\
+[Vikram]
+Here is the move. Instead of just committing to a board, we commit AND prove -- in zero \
+knowledge -- that what we committed to is a legal fleet. Exactly seventeen occupied cells. \
+One five-cell carrier. One four-cell battleship. Two three-cell cruisers. One two-cell \
+destroyer. No overlaps. No diagonals. All in bounds. That whole statement becomes a single \
+zk-SNARK. The proof goes on-chain at commit time, before the first shot is ever fired. The \
+all-empty-board attack you just saw? It literally cannot produce a valid proof, because the \
+circuit's fleet constraint rejects it. The proof IS the validity certificate -- if the \
+contract accepts it, the board is legal, full stop. And you learn absolutely nothing about \
+where the ships actually are.
+"""
+    set_notes(slide, notes)
+    return slide
+
+
+# ===========================================================================
+# Slide 5 — Noir + UltraHonk
+# ===========================================================================
+
+def slide_5_stack(prs):
+    slide = blank_slide(prs)
+    chrome(slide, 5, eyebrow=f"04  {MIDOT}  The Stack",
+           title="Noir + UltraHonk.")
+
+    # 2x2 tile grid
+    grid_top = Inches(2.55)
+    grid_h   = Inches(4.1)
     gap      = Inches(0.3)
     tile_w   = (SLIDE_W - MARGIN * 2 - gap) / 2
     tile_h   = (grid_h - gap) / 2
 
     tiles = [
-        ("PROOF",
-         "Expressive predicates",
-         "Prove the full fleet constraint in one shot."),
-        ("CIRCUIT",
-         "board_validity.nr",
-         "3,482 constraints: shapes, counts, no diagonals."),
-        ("HASH",
-         "Pedersen binding",
-         "Commitment and legality locked into one proof."),
-        ("VERIFY",
-         "On-chain, ~250k gas",
-         "HonkVerifier.sol auto-generated by Noir."),
+        ("NOIR",
+         "Rust-like zk DSL",
+         ["Readable circuits.",
+          "Compiles to arithmetic constraints.",
+          "WASM prover runs in the browser."]),
+        ("ULTRAHONK",
+         "PLONK-family backend",
+         ["Aztec's modern proof system.",
+          "No trusted setup ceremony.",
+          "No powers-of-tau, no toxic waste."]),
+        ("PEDERSEN HASH",
+         "In-circuit commitment",
+         ["Cheap to compute inside zk.",
+          "Binds 100 cells + salt.",
+          "One field element, used as the board commit."]),
+        ("HONKVERIFIER",
+         "Auto-generated Solidity",
+         ["~2,460 lines of verifier.",
+          "~250k gas per verify call.",
+          "Dropped straight into the repo."]),
     ]
 
     for i, (glyph, title, body) in enumerate(tiles):
@@ -811,141 +665,63 @@ def slide_6_zksnarks(prs):
         add_round_rect(slide, x, y, tile_w, tile_h,
                        fill_color=SURFACE, line_color=HAIRLINE,
                        line_width=Pt(1), corner=0.1)
-        add_text(slide, x + Inches(0.3), y + Inches(0.22),
-                 Inches(1.9), Inches(0.45),
+        add_text(slide, x + Inches(0.3), y + Inches(0.25),
+                 tile_w - Inches(0.6), Inches(0.45),
                  glyph,
                  font=CODE_FONT, size=13, bold=True, color=ORANGE, tracking=200)
-        add_text(slide, x + Inches(0.3), y + Inches(0.55),
+        add_text(slide, x + Inches(0.3), y + Inches(0.6),
                  tile_w - Inches(0.6), Inches(0.5),
                  title,
-                 font=BODY_FONT, size=18, bold=True, color=TEXT)
-        add_text(slide, x + Inches(0.3), y + Inches(0.9),
-                 tile_w - Inches(0.6), Inches(0.6),
-                 body,
-                 font=BODY_FONT, size=13, bold=False, color=MUTED)
+                 font=BODY_FONT, size=20, bold=True, color=TEXT)
+        tb = slide.shapes.add_textbox(x + Inches(0.3), y + Inches(1.05),
+                                      tile_w - Inches(0.6), Inches(0.95))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+        for bi, bline in enumerate(body):
+            p = tf.paragraphs[0] if bi == 0 else tf.add_paragraph()
+            p.alignment = PP_ALIGN.LEFT
+            p.space_before = Pt(0)
+            r = p.add_run()
+            r.text = bline
+            r.font.name = BODY_FONT
+            r.font.size = Pt(12)
+            r.font.bold = False
+            r.font.color.rgb = MUTED
 
     notes = """\
 [Vikram]
-Here is the move. Instead of proving a single cell's consistency at shot time, we prove an \
-entire CONSTRAINT at commit time: "the 100 private cells I am about to commit to really do form \
-a legal Battleship fleet -- one five-cell carrier, one four-cell battleship, two three-cell \
-cruisers, one two-cell destroyer, no overlaps, no diagonals, all in bounds -- AND their Pedersen \
-hash equals this public commitment." That whole statement becomes one zk-SNARK. The proof is a \
-few hundred bytes. I generate it in the browser before I ever send a transaction. The contract \
-verifies it once and now the committed board is not just consistent -- it is provably LEGAL. \
-The all-empty-board attack you just saw? It literally cannot produce a valid proof, because \
-the circuit's fleet-histogram constraint rejects it. The proof IS the validity certificate.
-
-[Pranav]
-And from there shot responses are cheap -- we could keep using Merkle for them, or a tiny \
-per-shot circuit. The expensive legality check only happens once.
+The concrete stack. Noir is Aztec's Rust-flavoured DSL for writing zk circuits -- it reads \
+like normal code and compiles down to an arithmetic constraint system. UltraHonk is the \
+proving backend, a modern PLONK-family scheme that needs no trusted setup ceremony, which \
+means I don't have to spend five minutes of this talk explaining powers of tau. Pedersen \
+hash is the commitment primitive we use inside the circuit -- cheap in zk and it binds all \
+one hundred private cells plus a salt into a single public field element. And finally, Noir \
+auto-generates a Solidity verifier contract -- HonkVerifier dot sol, about twenty-four \
+hundred lines, roughly two hundred and fifty thousand gas per verify call. That is the whole \
+cryptographic toolbox. No custom circuits hand-rolled in Circom, no Groth16 ceremony, no \
+custom verifier math.
 """
     set_notes(slide, notes)
     return slide
 
 
 # ===========================================================================
-# Slide 7 — Noir + UltraPlonk
+# Slide 6 — System Architecture
 # ===========================================================================
 
-def slide_7_noir(prs):
+def slide_6_architecture(prs):
     slide = blank_slide(prs)
-    chrome(slide, 7, eyebrow=f"06  {MIDOT}  Toolchain",
-           title="Noir + UltraPlonk.")
-
-    # Left: why noir bullets
-    left_l = MARGIN
-    left_w = Inches(6.4)
-    col_top = Inches(2.55)
-
-    add_text(slide, left_l, col_top, left_w, Inches(0.4),
-             "WHY NOIR",
-             font=BODY_FONT, size=11, bold=True, color=CYAN, tracking=250)
-
-    why = [
-        (f"{ARROW}", "Rust-like DX, readable circuits."),
-        (f"{ARROW}", "In-browser proving via @aztec/bb.js WASM."),
-        (f"{ARROW}", "UltraPlonk backend: no trusted setup."),
-        (f"{ARROW}", "Auto-generates a Solidity verifier contract."),
-        (f"{ARROW}", "~250k gas per on-chain verify."),
-    ]
-    _draw_bullets(slide, why, left_l, col_top + Inches(0.5), left_w,
-                  mark_color=ORANGE, text_color=TEXT)
-
-    # Right: circuit stat card
-    right_l = left_l + left_w + Inches(0.4)
-    right_w = SLIDE_W - right_l - MARGIN
-
-    add_round_rect(slide, right_l, col_top, right_w, Inches(4.2),
-                   fill_color=SURFACE, line_color=HAIRLINE,
-                   line_width=Pt(1), corner=0.08)
-
-    add_text(slide, right_l + Inches(0.4), col_top + Inches(0.3),
-             right_w - Inches(0.8), Inches(0.4),
-             "board_validity.nr",
-             font=CODE_FONT, size=12, bold=True, color=CYAN)
-    add_text(slide, right_l + Inches(0.4), col_top + Inches(0.7),
-             right_w - Inches(0.8), Inches(0.6),
-             "3,482",
-             font=BODY_FONT, size=42, bold=True, color=ORANGE)
-    add_text(slide, right_l + Inches(0.4), col_top + Inches(1.45),
-             right_w - Inches(0.8), Inches(0.4),
-             "constraints",
-             font=BODY_FONT, size=13, bold=False, color=MUTED)
-
-    stats = [
-        ("leaves",       "100 cells"),
-        ("fleet",        "1x5  1x4  2x3  1x2"),
-        ("hash",         "pedersen(cells, salt)"),
-        ("backend",      "UltraPlonk / Honk"),
-        ("verifier gas", "~250,000"),
-    ]
-    sy = col_top + Inches(2.0)
-    for i, (k, v) in enumerate(stats):
-        y = sy + Inches(0.35) * i
-        add_text(slide, right_l + Inches(0.4), y,
-                 Inches(1.8), Inches(0.3),
-                 k,
-                 font=CODE_FONT, size=11, bold=False, color=MUTED)
-        add_text(slide, right_l + Inches(2.1), y,
-                 right_w - Inches(2.5), Inches(0.3),
-                 v,
-                 font=CODE_FONT, size=11, bold=True, color=TEXT)
-
-    notes = """\
-[Vikram]
-Quick tool choice. Noir is Aztec's Rust-flavoured DSL for writing zk circuits. We picked it \
-over Circom for three reasons. One, the developer experience is a lot nicer -- it reads like \
-normal code. Two, its UltraPlonk backend does not need a trusted setup ceremony, which means I \
-do not have to spend five minutes of this talk explaining powers of tau. Three, it ships a \
-browser prover as a WASM module so the whole proof lifecycle -- placement, prove, verify -- \
-stays on one laptop. The circuit is called board_validity.nr, 3,482 constraints, and it's the \
-exact thing I described on the previous slide: shapes, counts, no-diagonal run checks, and a \
-Pedersen commitment binding the private board to the public hash.
-
-[Pranav]
-And Noir spits out a Solidity verifier contract we drop straight into the repo.
-"""
-    set_notes(slide, notes)
-    return slide
-
-
-# ===========================================================================
-# Slide 8 — System Architecture
-# ===========================================================================
-
-def slide_8_architecture(prs):
-    slide = blank_slide(prs)
-    chrome(slide, 8, eyebrow=f"07  {MIDOT}  Stack",
-           title="System architecture.")
+    chrome(slide, 6, eyebrow=f"05  {MIDOT}  Architecture",
+           title="Browser proves. Chain verifies.")
 
     stations = [
-        ("BRD", "Board",           "private[100]"),
-        ("PSD", "Pedersen",        f"hash {ARROW} commit"),
-        ("NOR", "Noir circuit",    "board_validity"),
-        ("UPL", "UltraPlonk",      "proof blob"),
-        ("VER", "Verifier",        "HonkVerifier.sol"),
-        ("GME", "BattleshipGame",  "settle on-chain"),
+        ("FLEET",   "Fleet",        "private[100]"),
+        ("PED",     "Pedersen",     f"hash {ARROW} commit"),
+        ("NOIR",    "Noir circuit", "board_validity"),
+        ("HONK",    "UltraHonk",    "proof blob"),
+        ("SOL",     "HonkVerifier", "Solidity verify"),
+        ("GAME",    "BattleshipGame", "settle on-chain"),
     ]
 
     usable_w = SLIDE_W - MARGIN * 2
@@ -975,7 +751,7 @@ def slide_8_architecture(prs):
     cap_top = row_y + tile_h + Inches(0.45)
     add_text(
         slide, MARGIN, cap_top, usable_w, Inches(0.35),
-        f"BROWSER  {ARROW}  WASM PROVER  {ARROW}  NOIR  {ARROW}  VERIFIER  {ARROW}  CHAIN",
+        f"BROWSER  {ARROW}  WASM PROVER  {ARROW}  NOIR  {ARROW}  SOLIDITY VERIFIER  {ARROW}  CHAIN",
         font=BODY_FONT, size=10, bold=True, color=MUTED, tracking=250,
         align=PP_ALIGN.CENTER,
     )
@@ -983,8 +759,8 @@ def slide_8_architecture(prs):
     bul_top = Inches(5.55)
     bullets = [
         (f"{MIDOT}", "Browser proves, chain verifies", CYAN),
-        (f"{MIDOT}", "Burner wallets, zero popups",    ORANGE),
-        (f"{MIDOT}", "Local Anvil for instant demo",   GOOD),
+        (f"{MIDOT}", "Burner wallets sign, zero popups", ORANGE),
+        (f"{MIDOT}", "Local Anvil for instant demo",    GOOD),
     ]
     col_w_b = usable_w / 3
     for i, (dot, text, color) in enumerate(bullets):
@@ -999,35 +775,35 @@ def slide_8_architecture(prs):
 
     notes = """\
 [Pranav]
-Data flow end to end. I open the React app. I drag my fleet onto the grid. I click Ready. The \
-frontend runs bb.js, which is Aztec's WASM-compiled Barretenberg prover, against the Noir \
-board-validity circuit right there in the browser. That spits out a proof blob. I send it as \
-calldata to BattleshipGame.sol on a local Anvil chain. The contract calls the Noir-generated \
-HonkVerifier, which accepts or rejects the proof on-chain. Every shot response goes through the \
-same pipeline with the shot-response circuit. Nothing trusts the frontend -- every claim is \
-verified by the contract. Two burner wallets derived from Anvil's deterministic test keys mean \
-no MetaMask popups, no wallet switching, no friction. It is genuinely a one-laptop hot-seat \
-demo and that is what you're about to see.
+End-to-end data flow, and this is exactly what you're about to watch live. I open the React \
+app. I drag my fleet onto the grid. I click Ready. The frontend pipes my private board into \
+a Pedersen hash for the commitment and into the Noir board-validity circuit, and runs bb.js \
+-- Aztec's WASM-compiled Barretenberg prover -- right there in the browser. Out comes a proof \
+blob. I push it as calldata to BattleshipGame dot sol on a local Anvil chain. BattleshipGame \
+calls the Noir-generated HonkVerifier, which accepts or rejects on-chain. Every shot response \
+goes through the same pipeline with a separate shot-response circuit. Nothing trusts the \
+frontend -- every single claim is verified by the contract. Two burner wallets derived from \
+Anvil's deterministic test keys mean no MetaMask popups and no wallet switching. One laptop, \
+hot-seat, zero trust.
 """
     set_notes(slide, notes)
     return slide
 
 
 # ===========================================================================
-# Slide 9 — Live Demo
+# Slide 7 — Live Demo
 # ===========================================================================
 
-def slide_9_demo(prs):
+def slide_7_demo(prs):
     slide = blank_slide(prs)
 
     add_text(
         slide, MARGIN, Inches(0.9),
         Inches(12.0), Inches(0.35),
-        f"08  {MIDOT}  SWITCH TO THE BROWSER",
+        f"06  {MIDOT}  SWITCH TO THE BROWSER",
         font=BODY_FONT, size=11, bold=True, color=CYAN, tracking=350,
     )
 
-    # "LIVE DEMO ->" — plain ASCII + arrow, no play triangle
     add_text(
         slide, Inches(0.0), Inches(2.35),
         Inches(13.333), Inches(2.3),
@@ -1052,43 +828,47 @@ def slide_9_demo(prs):
     )
 
     add_wordmark(slide)
-    add_progress_bar(slide, 9)
+    add_progress_bar(slide, 7)
 
     notes = """\
 [Pranav]
-Alright, I'm driving. I'm opening the app -- you see both players' grids side by side. I'm \
-clicking the carrier in the palette, rotating with R, dropping it on the top row. I'll place \
-the rest fast. Hit Ready. Watch the spinner: "proving board legality" -- that is the Noir \
-circuit running right now, 3,482 constraints in the browser. Proof verified on-chain. Player \
-two does the same. Now we fire -- I click (3, 5) on the enemy grid. Pending pulse. Boom, hit \
-confirmed on-chain, shot-response proof verified in about a second. Keep an eye on the Crypto \
-Log panel on the right -- every on-chain event is narrated as it happens.
+Alright, driving. I'm opening the app -- both players' grids side by side. Clicking the \
+carrier in the palette, rotating with R, dropping it on the top row. Placing the rest fast. \
+Hit Ready. Watch the spinner: "proving board legality" -- that is the Noir circuit running \
+right now in the browser. Proof verified on-chain. Player two does the same. Now we fire -- \
+I click on the enemy grid. Pending pulse. Hit confirmed, shot-response proof verified in \
+about a second.
 
 [Vikram]
-Watch the sunk animation when the last cell of a ship goes down. This is a full cryptographic \
-game loop running live with zero trust in the opponent.
+Keep an eye on the Crypto Log panel on the right -- every on-chain event is narrated as it \
+happens. Pedersen commit, board-validity proof, shot-response proof, sunk animation. This is \
+a full cryptographic game loop running live with zero trust in the opponent.
 """
     set_notes(slide, notes)
     return slide
 
 
 # ===========================================================================
-# Slide 10 — What Was Proven
+# Slide 8 — What Was Proven On-Chain
 # ===========================================================================
 
-def slide_10_proven(prs):
+def slide_8_proven(prs):
     slide = blank_slide(prs)
-    chrome(slide, 10, eyebrow=f"09  {MIDOT}  Recap",
+    chrome(slide, 8, eyebrow=f"07  {MIDOT}  Recap",
            title="What was proven on-chain.")
 
     items = [
-        ("1", "Board legality",       "Before a single shot is fired."),
-        ("2", "Shot-response honesty", "Hit or miss, without revealing the board."),
-        ("3", "No trusted setup",      "UltraPlonk, no ceremony, no toxic waste."),
-        ("4", "Cheap verification",    "About 250k gas per proof."),
+        ("1", "Board legality before the first shot",
+         "Can't commit an all-empty board. The circuit rejects it."),
+        ("2", "Every shot response consistent with the committed board",
+         "Hit or miss, bound back to the original Pedersen commitment."),
+        ("3", "Zero trust in the opponent's claims",
+         "Every answer is a proof the contract verifies, not a promise."),
+        ("4", "Zero trusted-setup ceremony",
+         "UltraHonk means no multi-party ritual, no toxic waste."),
     ]
     row_top = Inches(2.55)
-    row_h   = Inches(0.95)
+    row_h   = Inches(1.05)
     circle  = Inches(0.7)
 
     for i, (num, title, body) in enumerate(items):
@@ -1102,36 +882,36 @@ def slide_10_proven(prs):
                  font=BODY_FONT, size=24, bold=True, color=BG,
                  align=PP_ALIGN.CENTER)
         add_text(slide, MARGIN + circle + Inches(0.3), y + Inches(0.02),
-                 Inches(10), Inches(0.5),
+                 Inches(11.5), Inches(0.5),
                  title,
-                 font=BODY_FONT, size=22, bold=True, color=TEXT)
-        add_text(slide, MARGIN + circle + Inches(0.3), y + Inches(0.45),
-                 Inches(10.5), Inches(0.4),
+                 font=BODY_FONT, size=20, bold=True, color=TEXT)
+        add_text(slide, MARGIN + circle + Inches(0.3), y + Inches(0.5),
+                 Inches(11.5), Inches(0.4),
                  body,
-                 font=BODY_FONT, size=14, bold=False, color=MUTED)
+                 font=BODY_FONT, size=13, bold=False, color=MUTED)
 
     notes = """\
 [Vikram]
-Four things the cryptography actually guaranteed during that demo. One: before the first shot, \
-each player produced a zk-SNARK proving their board contained exactly the standard fleet -- \
-seventeen cells, correct ship shapes, no overlaps, no diagonals. The contract either accepted \
-that proof or the game did not start. Two: for every shot, the responding player produced a \
-second proof binding the answer back to the original committed board, so they could never \
-flip a hit to a miss. Three: none of this needed a trusted setup ceremony, because we used \
-UltraPlonk. Four: on-chain verification cost about 250,000 gas per proof -- cheap enough to \
-live inside a real game loop. No trust, no reveal, no ceremony.
+Four things the cryptography actually guaranteed during that demo. One: before the first shot \
+was fired, each player produced a zk-SNARK proving their board contained exactly the standard \
+fleet -- seventeen cells, correct ship shapes, no overlaps, no diagonals. The all-empty-board \
+cheat is impossible. Two: every shot response came with its own proof binding the answer back \
+to the original Pedersen commitment, so a hit cannot be flipped to a miss. Three: zero trust \
+-- every opponent claim is a proof the contract verifies, not a promise we take on faith. \
+Four: zero trusted setup -- UltraHonk needs no multi-party ceremony, no powers of tau, no \
+toxic waste to dispose of. That is the whole cryptographic contract of this demo.
 """
     set_notes(slide, notes)
     return slide
 
 
 # ===========================================================================
-# Slide 11 — What's Next / Q&A
+# Slide 9 — What's Next / Q&A
 # ===========================================================================
 
-def slide_11_next(prs):
+def slide_9_next(prs):
     slide = blank_slide(prs)
-    chrome(slide, 11, eyebrow=f"10  {MIDOT}  Roadmap",
+    chrome(slide, 9, eyebrow=f"08  {MIDOT}  Next + Q&A",
            title="What's next.")
 
     left_l = MARGIN
@@ -1140,12 +920,11 @@ def slide_11_next(prs):
 
     steps = [
         ("01", "Mainnet deployment path",    "Solidity verifier is deploy-ready."),
-        ("02", "Shot-response optimization", "Target sub-second proving."),
+        ("02", "Circuit optimization",       "Shrink shot-response constraints."),
         ("03", "Multi-game lobby",           "Matchmaking plus state routing."),
-        ("04", "Tournament mode",            "Trustless brackets, auditable replays."),
     ]
     for i, (num, title, body) in enumerate(steps):
-        y = col_top + Inches(0.95) * i
+        y = col_top + Inches(1.0) * i
         add_text(slide, left_l, y, Inches(0.6), Inches(0.4),
                  num,
                  font=CODE_FONT, size=13, bold=True, color=ORANGE, tracking=150)
@@ -1183,13 +962,11 @@ def slide_11_next(prs):
     notes = """\
 [Pranav]
 Where does this go from here? Mainnet deployment is basically a deploy script away -- the \
-verifier is already Solidity. Shot-response proving time can come down with some circuit \
-pruning. Longer term we want a multi-game lobby and a tournament mode where every move in \
-every bracket is cryptographically auditable. That's the pitch. Thanks for your time.
-
-[Vikram]
-We're happy to take questions on the circuits, the contract, Noir, bb.js, the frontend -- \
-anything you saw in the demo. The full stack is open source.
+Solidity verifier is already production-shaped. We want to prune the shot-response circuit to \
+get proving time down further, and longer term stand up a multi-game lobby so this is not \
+just a hot-seat demo. That's the pitch. Thanks for your time. We're happy to take questions \
+on the circuits, the contract, Noir, bb.js, burner wallets -- anything you saw in the demo. \
+The full stack is open source.
 """
     set_notes(slide, notes)
     return slide
@@ -1205,15 +982,13 @@ def main():
     prs = new_prs()
     slide_1_title(prs)
     slide_2_problem(prs)
-    slide_3_merkle_101(prs)
-    slide_4_merkle_battleship(prs)
-    slide_5_merkle_hole(prs)
-    slide_6_zksnarks(prs)
-    slide_7_noir(prs)
-    slide_8_architecture(prs)
-    slide_9_demo(prs)
-    slide_10_proven(prs)
-    slide_11_next(prs)
+    slide_3_validity_gap(prs)
+    slide_4_fix(prs)
+    slide_5_stack(prs)
+    slide_6_architecture(prs)
+    slide_7_demo(prs)
+    slide_8_proven(prs)
+    slide_9_next(prs)
 
     prs.save(str(out_path))
     print(f"Saved: {out_path}  ({out_path.stat().st_size:,} bytes)")

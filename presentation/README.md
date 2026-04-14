@@ -7,7 +7,7 @@ Companion slide deck for the Solidity Battleship zk-SNARK overhaul.
 | File | Description |
 |---|---|
 | `generate.py` | python-pptx script that builds the deck |
-| `battleship-zk-demo.pptx` | Generated PowerPoint (8 slides, ~8 min) |
+| `battleship-zk-demo.pptx` | Generated PowerPoint (9 slides, ~8 min) |
 
 ## Regenerate
 
@@ -37,7 +37,7 @@ tight neutral ramp, one orange primary accent, and a cyan secondary. It is
 deliberately typographic: large hero sizes on the title and demo slides, a
 36pt slide title, an 11pt tracked-out small-caps eyebrow, and a short orange
 rule below every title. Every non-title slide carries a `battleship.zk`
-wordmark and a slim orange progress bar showing `n / 8`.
+wordmark and a slim orange progress bar showing `n / 9`.
 
 ### Palette
 
@@ -68,16 +68,17 @@ rendering. Without them, PowerPoint/Keynote substitute the fallbacks.
 
 ### Per-slide layout
 
-| # | Treatment                                                     |
-|---|----------------------------------------------------------------|
-| 1 | Hero — "Battleship," / "proven." split across two lines, 72pt  |
-| 2 | Pull quote with oversized orange " and white/orange split line |
-| 3 | Two-column comparison (blue "✓" / red-tint "✗") + exploit callout |
-| 4 | 2 × 2 tile grid with large orange glyphs (λ, π, #, ✓)          |
-| 5 | Horizontal 6-station flow (BRD → PSD → NOR → UPL → VER → GME)  |
-| 6 | Single "▶ LIVE DEMO" in 96pt orange, centred                   |
-| 7 | Numbered recap rows with orange number discs                   |
-| 8 | 60/40 split: roadmap on left, giant "Questions?" on right      |
+| # | Treatment                                                       |
+|---|-----------------------------------------------------------------|
+| 1 | Hero — "Battleship," / "proven." split across two lines, 72pt   |
+| 2 | Pull quote with oversized orange " and white/orange split line  |
+| 3 | Empty 10x10 grid + numbered cheat-flow (the "feel-it" slide)    |
+| 4 | Centered quote: "The proof IS the validity certificate."        |
+| 5 | 2 × 2 tile grid: Noir · UltraHonk · Pedersen · HonkVerifier     |
+| 6 | Horizontal 6-station flow (Fleet → Pedersen → Noir → Honk → Sol → Game) |
+| 7 | Single "LIVE DEMO →" in 96pt orange, centred                    |
+| 8 | Numbered on-chain recap with orange number discs                |
+| 9 | 60/40 split: roadmap on left, giant "Questions?" on right       |
 
 ## Regeneration workflow
 
@@ -103,15 +104,16 @@ python3 -m pip install python-pptx pillow --break-system-packages
 
 | # | Title | Owner | Duration |
 |---|---|---|---|
-| 1 | Battleship, Proven (title) | Presenter A | ~30 s |
-| 2 | The Problem | Presenter A | ~1 min |
-| 3 | Why Merkle Isn't Enough | Presenter A | ~1 min |
-| 4 | Enter zk-SNARKs (Noir) | Presenter B | ~1 min |
-| 5 | System Architecture | Presenter B | ~1 min |
-| 6 | Live Demo | Both | ~2 min |
-| 7 | What Was Proven | Presenter B | ~1 min |
-| 8 | What's Next & Q&A | Presenter A | ~30 s |
+| 1 | Battleship, Proven (title) | Pranav | ~30 s |
+| 2 | The Problem | Vikram | ~1 min |
+| 3 | The Validity Gap | Vikram | ~1 min |
+| 4 | The Fix: zk-SNARKs | Vikram | ~1 min |
+| 5 | Noir + UltraHonk | Vikram | ~1 min |
+| 6 | System Architecture | Pranav | ~1 min |
+| 7 | Live Demo | Both | ~2 min |
+| 8 | What Was Proven On-Chain | Vikram | ~1 min |
+| 9 | What's Next & Q&A | Pranav | ~30 s |
 
 ## Demo slide note
 
-Slide 6 is intentionally minimal — a single large "▶ LIVE DEMO" heading. The live application does the talking. Speaker notes for that slide contain a full script for both presenters: Presenter A drives the UI while Presenter B narrates the crypto log panel.
+Slide 7 is intentionally minimal — a single large "LIVE DEMO →" heading. The live application does the talking. Speaker notes for that slide contain a full script for both presenters: Pranav drives the UI while Vikram narrates the crypto log panel.
