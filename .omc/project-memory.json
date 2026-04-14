@@ -148,14 +148,20 @@
     },
     {
       "path": "frontend/src/App.tsx",
-      "accessCount": 25,
-      "lastAccessed": 1776201964873,
+      "accessCount": 31,
+      "lastAccessed": 1776204189734,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/prover.ts",
+      "accessCount": 22,
+      "lastAccessed": 1776207407100,
       "type": "file"
     },
     {
       "path": "frontend/src/lib/contract.ts",
-      "accessCount": 16,
-      "lastAccessed": 1776201873791,
+      "accessCount": 17,
+      "lastAccessed": 1776202758099,
       "type": "file"
     },
     {
@@ -171,12 +177,6 @@
       "type": "file"
     },
     {
-      "path": "frontend/src/lib/prover.ts",
-      "accessCount": 11,
-      "lastAccessed": 1776201611808,
-      "type": "file"
-    },
-    {
       "path": "contracts/test/BattleshipGame.t.sol",
       "accessCount": 11,
       "lastAccessed": 1776201833661,
@@ -184,8 +184,20 @@
     },
     {
       "path": "circuits/board_validity/src/main.nr",
-      "accessCount": 10,
-      "lastAccessed": 1776199912958,
+      "accessCount": 11,
+      "lastAccessed": 1776205685382,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/verifiers/BoardValidityVerifier.sol",
+      "accessCount": 11,
+      "lastAccessed": 1776206678350,
+      "type": "file"
+    },
+    {
+      "path": "contracts/script/Deploy.s.sol",
+      "accessCount": 9,
+      "lastAccessed": 1776202790618,
       "type": "file"
     },
     {
@@ -195,15 +207,15 @@
       "type": "file"
     },
     {
-      "path": "contracts/script/Deploy.s.sol",
+      "path": "circuits/shot_response/src/main.nr",
       "accessCount": 8,
-      "lastAccessed": 1776200951309,
+      "lastAccessed": 1776205685766,
       "type": "file"
     },
     {
-      "path": "circuits/shot_response/src/main.nr",
+      "path": "frontend/src/components/Grid.tsx",
       "accessCount": 7,
-      "lastAccessed": 1776199763573,
+      "lastAccessed": 1776204213544,
       "type": "file"
     },
     {
@@ -213,9 +225,21 @@
       "type": "file"
     },
     {
-      "path": "contracts/src/verifiers/BoardValidityVerifier.sol",
+      "path": "frontend/src/lib/provingSimulator.ts",
       "accessCount": 6,
-      "lastAccessed": 1776201345841,
+      "lastAccessed": 1776202771536,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1776202969153,
+      "type": "file"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "accessCount": 6,
+      "lastAccessed": 1776206111497,
       "type": "file"
     },
     {
@@ -225,27 +249,9 @@
       "type": "file"
     },
     {
-      "path": "frontend/src/components/Grid.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1776197768377,
-      "type": "file"
-    },
-    {
       "path": "frontend/package.json",
       "accessCount": 5,
       "lastAccessed": 1776199769742,
-      "type": "file"
-    },
-    {
-      "path": "frontend/src/main.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1776201203522,
-      "type": "file"
-    },
-    {
-      "path": "frontend/src/lib/provingSimulator.ts",
-      "accessCount": 5,
-      "lastAccessed": 1776202303044,
       "type": "file"
     },
     {
@@ -258,12 +264,6 @@
       "path": "frontend/src/components/ShipPalette.tsx",
       "accessCount": 4,
       "lastAccessed": 1776197786747,
-      "type": "file"
-    },
-    {
-      "path": "frontend/vite.config.ts",
-      "accessCount": 4,
-      "lastAccessed": 1776200931527,
       "type": "file"
     },
     {
@@ -315,15 +315,15 @@
       "type": "file"
     },
     {
-      "path": "contracts/src/libraries/BoardValidator.sol",
-      "accessCount": 2,
-      "lastAccessed": 1776195664457,
+      "path": "README.md",
+      "accessCount": 3,
+      "lastAccessed": 1776205713247,
       "type": "file"
     },
     {
-      "path": "README.md",
+      "path": "contracts/src/libraries/BoardValidator.sol",
       "accessCount": 2,
-      "lastAccessed": 1776196111655,
+      "lastAccessed": 1776195664457,
       "type": "file"
     },
     {
@@ -363,6 +363,12 @@
       "type": "file"
     },
     {
+      "path": "contracts/src/verifiers/ShotResponseVerifier.sol",
+      "accessCount": 2,
+      "lastAccessed": 1776206677528,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/lib/merkle.ts",
       "accessCount": 1,
       "lastAccessed": 1776195051571,
@@ -384,12 +390,6 @@
       "path": "circuits/shot_response/Nargo.toml",
       "accessCount": 1,
       "lastAccessed": 1776195620537,
-      "type": "file"
-    },
-    {
-      "path": "contracts/src/verifiers/ShotResponseVerifier.sol",
-      "accessCount": 1,
-      "lastAccessed": 1776195630245,
       "type": "file"
     },
     {

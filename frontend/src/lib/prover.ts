@@ -259,7 +259,7 @@ export async function proveBoardValidity(
     commitment,
   });
   const { proof, publicInputs } = await backend.generateProof(witness, {
-    verifierTarget: "evm-no-zk",
+    verifierTarget: "evm",
   });
 
   return {
@@ -305,7 +305,7 @@ export async function proveShotResponse(
     hit: hit ? "1" : "0",
   });
   const { proof, publicInputs } = await backend.generateProof(witness, {
-    verifierTarget: "evm-no-zk",
+    verifierTarget: "evm",
   });
 
   return {
