@@ -237,7 +237,16 @@ export default function App() {
     pending[i] = "PENDING_SHOT";
     setCurrent({ ...current, enemyCells: pending });
 
-    // 1) fireShot tx from shooter burner.
+    const revertPending = () => {
+      const reverted = current.enemyCells.slice();
+      reverted[i] = "UNKNOWN";
+      setCurrent({ ...current, enemyCells: reverted });
+      setProving(null);
+    };
+
+    // 1) fireShot tx from shooter burner. MUST succeed before we prove the
+    //    response or submit respondShot — otherwise the chain has no pending
+    //    shot and respondShot will always revert with "no pending shot".
     if (gameId !== null) {
       try {
         setProving("Submitting shot on-chain…");
@@ -248,6 +257,8 @@ export default function App() {
         console.error("fireShot failed", e);
         setError(`On-chain fireShot failed: ${msg}`);
         appendLog(`\u26A0 fireShot failed: ${msg.slice(0, 120)}`);
+        revertPending();
+        return;
       }
     }
 
@@ -282,6 +293,8 @@ export default function App() {
         console.error("respondShot failed", e);
         setError(`On-chain respondShot failed: ${msg}`);
         appendLog(`\u26A0 respondShot failed: ${msg.slice(0, 120)}`);
+        revertPending();
+        return;
       }
     }
 

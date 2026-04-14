@@ -45,10 +45,15 @@ export function Grid({
         {label}
       </div>
       <div
-        className="grid grid-cols-10 gap-[3px] p-2 bg-navy-deep rounded-lg border border-navy-light shadow-inner"
+        className={`relative grid grid-cols-10 gap-[3px] p-2 bg-navy-deep rounded-lg border border-navy-light shadow-inner transition-opacity ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
         style={{ width: 360, height: 360 }}
         onMouseLeave={onCellLeave}
       >
+        {disabled && (
+          <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-navy border border-orange/40 text-[9px] uppercase tracking-widest text-orange font-semibold pointer-events-none z-10">
+            Busy
+          </div>
+        )}
         {cells.map((state, i) => (
           <motion.button
             key={i}
