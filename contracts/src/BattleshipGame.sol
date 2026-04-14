@@ -71,14 +71,22 @@ contract BattleshipGame {
         emit GameCreated(gameId, msg.sender, opponent);
     }
 
-    function commitBoard(uint256 gameId, bytes32 commitment, bytes calldata proof) external {
+    function commitBoard(
+        uint256 gameId,
+        bytes32 commitment,
+        bytes calldata proof,
+        bytes32[] calldata publicInputs
+    ) external {
         Game storage g = games[gameId];
         require(g.state == GameState.Created || g.state == GameState.Committed, "bad state");
         uint8 idx = _playerIndex(g, msg.sender);
         require(!g.committed[idx], "already committed");
 
-        bytes32[] memory publicInputs = new bytes32[](1);
-        publicInputs[0] = commitment;
+        // publicInputs[0] is the circuit's declared `commitment` field; the
+        // remaining 8 are UltraHonk's pairing-point accumulator appended by the
+        // prover. We bind the first slot to the caller's `commitment` argument
+        // and pass the whole array through to the verifier unchanged.
+        require(publicInputs.length >= 1 && publicInputs[0] == commitment, "commitment mismatch");
         require(boardVerifier.verify(proof, publicInputs), "invalid board proof");
 
         g.commitments[idx] = commitment;
@@ -113,18 +121,27 @@ contract BattleshipGame {
         emit ShotFired(gameId, msg.sender, x, y);
     }
 
-    function respondShot(uint256 gameId, bool hit, bytes calldata proof) external {
+    function respondShot(
+        uint256 gameId,
+        bool hit,
+        bytes calldata proof,
+        bytes32[] calldata publicInputs
+    ) external {
         Game storage g = games[gameId];
         require(g.state == GameState.Playing, "not playing");
         require(g.shotPending, "no pending shot");
         uint8 responder = 1 - g.turn; // opponent of the shooter responds
         require(g.players[responder] == msg.sender, "not responder");
 
-        bytes32[] memory publicInputs = new bytes32[](4);
-        publicInputs[0] = g.commitments[responder];
-        publicInputs[1] = bytes32(uint256(g.pendingX));
-        publicInputs[2] = bytes32(uint256(g.pendingY));
-        publicInputs[3] = bytes32(uint256(hit ? 1 : 0));
+        // publicInputs[0..3] are the circuit's declared public fields
+        // (commitment, x, y, hit); remaining 8 are the UltraHonk pairing
+        // accumulator. We bind the first four to trusted storage state and
+        // pass the whole array through to the verifier unchanged.
+        require(publicInputs.length >= 4, "bad public inputs");
+        require(publicInputs[0] == g.commitments[responder], "commitment mismatch");
+        require(uint256(publicInputs[1]) == g.pendingX, "x mismatch");
+        require(uint256(publicInputs[2]) == g.pendingY, "y mismatch");
+        require(uint256(publicInputs[3]) == (hit ? 1 : 0), "hit mismatch");
         require(shotVerifier.verify(proof, publicInputs), "invalid shot proof");
 
         uint8 shooter = g.turn;

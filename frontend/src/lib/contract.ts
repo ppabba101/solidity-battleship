@@ -60,6 +60,7 @@ export const BATTLESHIP_ABI = [
       { name: "gameId", type: "uint256" },
       { name: "commitment", type: "bytes32" },
       { name: "proof", type: "bytes" },
+      { name: "publicInputs", type: "bytes32[]" },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -82,6 +83,7 @@ export const BATTLESHIP_ABI = [
       { name: "gameId", type: "uint256" },
       { name: "hit", type: "bool" },
       { name: "proof", type: "bytes" },
+      { name: "publicInputs", type: "bytes32[]" },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -193,6 +195,7 @@ export async function commitBoard(
   gameId: bigint,
   commitment: `0x${string}`,
   proof: `0x${string}`,
+  publicInputs: readonly `0x${string}`[],
 ): Promise<`0x${string}`> {
   const wallet = getWalletClient(player);
   const hash = await wallet.writeContract({
@@ -200,7 +203,7 @@ export async function commitBoard(
     address: CONTRACT_ADDRESS,
     abi: BATTLESHIP_ABI,
     functionName: "commitBoard",
-    args: [gameId, commitment, proof],
+    args: [gameId, commitment, proof, publicInputs],
     chain: foundry,
   });
   emitTxSent("commitBoard", hash);
@@ -235,6 +238,7 @@ export async function respondShot(
   gameId: bigint,
   hit: boolean,
   proof: `0x${string}`,
+  publicInputs: readonly `0x${string}`[],
 ): Promise<`0x${string}`> {
   const wallet = getWalletClient(player);
   const hash = await wallet.writeContract({
@@ -242,7 +246,7 @@ export async function respondShot(
     address: CONTRACT_ADDRESS,
     abi: BATTLESHIP_ABI,
     functionName: "respondShot",
-    args: [gameId, hit, proof],
+    args: [gameId, hit, proof, publicInputs],
     chain: foundry,
   });
   emitTxSent("respondShot", hash);

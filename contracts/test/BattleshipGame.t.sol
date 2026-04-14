@@ -26,6 +26,19 @@ contract BattleshipGameTest is Test {
 
     bytes internal constant PROOF = hex"deadbeef";
 
+    function _pi1(bytes32 commitment) internal pure returns (bytes32[] memory pi) {
+        pi = new bytes32[](1);
+        pi[0] = commitment;
+    }
+
+    function _pi4(bytes32 commitment, uint8 x, uint8 y, bool hit) internal pure returns (bytes32[] memory pi) {
+        pi = new bytes32[](4);
+        pi[0] = commitment;
+        pi[1] = bytes32(uint256(x));
+        pi[2] = bytes32(uint256(y));
+        pi[3] = bytes32(uint256(hit ? 1 : 0));
+    }
+
     function setUp() public {
         boardVerifier = new MockVerifier();
         shotVerifier = new MockVerifier();
@@ -39,9 +52,9 @@ contract BattleshipGameTest is Test {
 
     function _commitBoth(uint256 id) internal {
         vm.prank(alice);
-        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF);
+        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF, _pi1(bytes32(uint256(0xA1))));
         vm.prank(bob);
-        game.commitBoard(id, bytes32(uint256(0xB2)), PROOF);
+        game.commitBoard(id, bytes32(uint256(0xB2)), PROOF, _pi1(bytes32(uint256(0xB2))));
     }
 
     function testCreateGame() public {
@@ -56,7 +69,7 @@ contract BattleshipGameTest is Test {
     function testCommitValidBoard() public {
         uint256 id = _createGame();
         vm.prank(alice);
-        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF);
+        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF, _pi1(bytes32(uint256(0xA1))));
         (,, BattleshipGame.GameState state,,,,,,,) = game.getGame(id);
         assertEq(uint8(state), uint8(BattleshipGame.GameState.Committed));
         assertEq(game.commitmentOf(id, 0), bytes32(uint256(0xA1)));
@@ -67,7 +80,7 @@ contract BattleshipGameTest is Test {
         boardVerifier.setOk(false);
         vm.prank(alice);
         vm.expectRevert(bytes("invalid board proof"));
-        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF);
+        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF, _pi1(bytes32(uint256(0xA1))));
     }
 
     function testCheaterCannotCommitEmptyBoard() public {
@@ -77,7 +90,7 @@ contract BattleshipGameTest is Test {
         boardVerifier.setOk(false);
         vm.prank(alice);
         vm.expectRevert(bytes("invalid board proof"));
-        game.commitBoard(id, bytes32(0), PROOF);
+        game.commitBoard(id, bytes32(0), PROOF, _pi1(bytes32(0)));
     }
 
     function testTurnEnforcement() public {
@@ -105,7 +118,7 @@ contract BattleshipGameTest is Test {
             vm.prank(alice);
             game.fireShot(id, i % 10, i / 10);
             vm.prank(bob);
-            game.respondShot(id, true, PROOF);
+            game.respondShot(id, true, PROOF, _pi4(bytes32(uint256(0xB2)), i % 10, i / 10, true));
         }
 
         (,, BattleshipGame.GameState state,,,,,, uint8 hits1, address winner) = game.getGame(id);
@@ -123,7 +136,7 @@ contract BattleshipGameTest is Test {
         shotVerifier.setOk(false);
         vm.prank(bob);
         vm.expectRevert(bytes("invalid shot proof"));
-        game.respondShot(id, true, PROOF);
+        game.respondShot(id, true, PROOF, _pi4(bytes32(uint256(0xB2)), 3, 4, true));
     }
 
     function testTimeoutWin() public {
@@ -152,7 +165,7 @@ contract BattleshipGameTest is Test {
     function testTimeoutCommitPhase() public {
         uint256 id = _createGame();
         vm.prank(alice);
-        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF);
+        game.commitBoard(id, bytes32(uint256(0xA1)), PROOF, _pi1(bytes32(uint256(0xA1))));
         // Bob never commits.
         vm.roll(block.number + 51);
         vm.prank(alice);

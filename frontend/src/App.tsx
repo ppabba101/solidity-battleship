@@ -152,7 +152,7 @@ export default function App() {
     setProving("Proving your board…");
     const start = performance.now();
     try {
-      const { commitment, proof, ms } = await simulateBoardValidity(
+      const { commitment, proof, publicInputs, ms } = await simulateBoardValidity(
         current.fleet,
         current.salt,
       );
@@ -182,6 +182,7 @@ export default function App() {
           currentGameId,
           commitment,
           proof,
+          publicInputs,
         );
         appendLog(
           `chain: commitBoard tx=${txHash.slice(0, 10)}… commitment=${commitment.slice(0, 10)}…`,
@@ -240,7 +241,7 @@ export default function App() {
     // 2) Compute + prove response as the opponent (hot-seat local demo).
     setProving(`Proving shot (${x},${y})…`);
     const start = performance.now();
-    const { hit, proof, ms } = await simulateShotResponse(
+    const { hit, proof, publicInputs: shotPublicInputs, ms } = await simulateShotResponse(
       opponent.fleet,
       opponent.salt,
       x,
@@ -259,7 +260,7 @@ export default function App() {
       try {
         setProving("Submitting response on-chain…");
         const responder: 0 | 1 = player === 0 ? 1 : 0;
-        const tx = await contractRespondShot(responder, gameId, hit, proof);
+        const tx = await contractRespondShot(responder, gameId, hit, proof, shotPublicInputs);
         appendLog(
           `chain: respondShot tx=${tx.slice(0, 10)}… ${hit ? "HIT" : "MISS"}`,
         );

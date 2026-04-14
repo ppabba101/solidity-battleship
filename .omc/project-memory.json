@@ -142,44 +142,50 @@
   "hotPaths": [
     {
       "path": "presentation/generate.py",
-      "accessCount": 39,
-      "lastAccessed": 1776201398139,
+      "accessCount": 41,
+      "lastAccessed": 1776201549168,
       "type": "file"
     },
     {
       "path": "frontend/src/App.tsx",
-      "accessCount": 19,
-      "lastAccessed": 1776200071832,
+      "accessCount": 25,
+      "lastAccessed": 1776201964873,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/contract.ts",
+      "accessCount": 16,
+      "lastAccessed": 1776201873791,
       "type": "file"
     },
     {
       "path": "presentation/README.md",
+      "accessCount": 14,
+      "lastAccessed": 1776201581708,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/BattleshipGame.sol",
       "accessCount": 12,
-      "lastAccessed": 1776201385498,
+      "lastAccessed": 1776201757737,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/prover.ts",
+      "accessCount": 11,
+      "lastAccessed": 1776201611808,
+      "type": "file"
+    },
+    {
+      "path": "contracts/test/BattleshipGame.t.sol",
+      "accessCount": 11,
+      "lastAccessed": 1776201833661,
       "type": "file"
     },
     {
       "path": "circuits/board_validity/src/main.nr",
       "accessCount": 10,
       "lastAccessed": 1776199912958,
-      "type": "file"
-    },
-    {
-      "path": "frontend/src/lib/contract.ts",
-      "accessCount": 10,
-      "lastAccessed": 1776201308622,
-      "type": "file"
-    },
-    {
-      "path": "frontend/src/lib/prover.ts",
-      "accessCount": 10,
-      "lastAccessed": 1776201339360,
-      "type": "file"
-    },
-    {
-      "path": "contracts/src/BattleshipGame.sol",
-      "accessCount": 9,
-      "lastAccessed": 1776201287418,
       "type": "file"
     },
     {
@@ -237,6 +243,12 @@
       "type": "file"
     },
     {
+      "path": "frontend/src/lib/provingSimulator.ts",
+      "accessCount": 5,
+      "lastAccessed": 1776202303044,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/lib/sfx.ts",
       "accessCount": 4,
       "lastAccessed": 1776197749580,
@@ -246,12 +258,6 @@
       "path": "frontend/src/components/ShipPalette.tsx",
       "accessCount": 4,
       "lastAccessed": 1776197786747,
-      "type": "file"
-    },
-    {
-      "path": "frontend/src/lib/provingSimulator.ts",
-      "accessCount": 4,
-      "lastAccessed": 1776200065801,
       "type": "file"
     },
     {
@@ -312,12 +318,6 @@
       "path": "contracts/src/libraries/BoardValidator.sol",
       "accessCount": 2,
       "lastAccessed": 1776195664457,
-      "type": "file"
-    },
-    {
-      "path": "contracts/test/BattleshipGame.t.sol",
-      "accessCount": 2,
-      "lastAccessed": 1776195702621,
       "type": "file"
     },
     {
