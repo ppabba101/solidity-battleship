@@ -48,7 +48,7 @@ type BackendCtor = new (
 ) => {
   generateProof: (
     witness: Uint8Array,
-    options?: { keccak?: boolean },
+    options?: { keccak?: boolean; keccakZK?: boolean },
   ) => Promise<{ proof: Uint8Array; publicInputs: string[] }>;
 };
 
@@ -218,8 +218,8 @@ export async function proveBoardValidity(
     commitment,
   });
   const { proof, publicInputs } = await backend.generateProof(witness, {
-    keccak: true,
-  });
+    keccakZK: true,
+  } as unknown as { keccak?: boolean });
 
   return {
     commitment,
@@ -251,8 +251,8 @@ export async function proveShotResponse(
     hit: hit ? "1" : "0",
   });
   const { proof, publicInputs } = await backend.generateProof(witness, {
-    keccak: true,
-  });
+    keccakZK: true,
+  } as unknown as { keccak?: boolean });
 
   return {
     hit,

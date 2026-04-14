@@ -141,15 +141,21 @@
   },
   "hotPaths": [
     {
+      "path": "presentation/generate.py",
+      "accessCount": 39,
+      "lastAccessed": 1776201398139,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/App.tsx",
       "accessCount": 19,
       "lastAccessed": 1776200071832,
       "type": "file"
     },
     {
-      "path": "presentation/generate.py",
-      "accessCount": 18,
-      "lastAccessed": 1776200085100,
+      "path": "presentation/README.md",
+      "accessCount": 12,
+      "lastAccessed": 1776201385498,
       "type": "file"
     },
     {
@@ -160,14 +166,20 @@
     },
     {
       "path": "frontend/src/lib/contract.ts",
-      "accessCount": 9,
-      "lastAccessed": 1776200103569,
+      "accessCount": 10,
+      "lastAccessed": 1776201308622,
       "type": "file"
     },
     {
-      "path": "presentation/README.md",
+      "path": "frontend/src/lib/prover.ts",
+      "accessCount": 10,
+      "lastAccessed": 1776201339360,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/BattleshipGame.sol",
       "accessCount": 9,
-      "lastAccessed": 1776200123454,
+      "lastAccessed": 1776201287418,
       "type": "file"
     },
     {
@@ -177,9 +189,9 @@
       "type": "file"
     },
     {
-      "path": "contracts/src/BattleshipGame.sol",
+      "path": "contracts/script/Deploy.s.sol",
       "accessCount": 8,
-      "lastAccessed": 1776199774844,
+      "lastAccessed": 1776200951309,
       "type": "file"
     },
     {
@@ -189,21 +201,15 @@
       "type": "file"
     },
     {
-      "path": "contracts/script/Deploy.s.sol",
-      "accessCount": 7,
-      "lastAccessed": 1776199768693,
-      "type": "file"
-    },
-    {
-      "path": "frontend/src/lib/prover.ts",
-      "accessCount": 7,
-      "lastAccessed": 1776200656795,
-      "type": "file"
-    },
-    {
       "path": "frontend/src/components/PlacementBoard.tsx",
       "accessCount": 6,
       "lastAccessed": 1776197831774,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/verifiers/BoardValidityVerifier.sol",
+      "accessCount": 6,
+      "lastAccessed": 1776201345841,
       "type": "file"
     },
     {
@@ -225,6 +231,12 @@
       "type": "file"
     },
     {
+      "path": "frontend/src/main.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1776201203522,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/lib/sfx.ts",
       "accessCount": 4,
       "lastAccessed": 1776197749580,
@@ -243,9 +255,9 @@
       "type": "file"
     },
     {
-      "path": "frontend/src/main.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1776195805445,
+      "path": "frontend/vite.config.ts",
+      "accessCount": 4,
+      "lastAccessed": 1776200931527,
       "type": "file"
     },
     {
@@ -282,12 +294,6 @@
       "path": "frontend/public/sfx/README.md",
       "accessCount": 3,
       "lastAccessed": 1776197746258,
-      "type": "file"
-    },
-    {
-      "path": "frontend/vite.config.ts",
-      "accessCount": 3,
-      "lastAccessed": 1776200004663,
       "type": "file"
     },
     {
@@ -351,9 +357,9 @@
       "type": "file"
     },
     {
-      "path": "contracts/src/verifiers/BoardValidityVerifier.sol",
+      "path": "frontend/scripts/deploy-local.sh",
       "accessCount": 2,
-      "lastAccessed": 1776197953404,
+      "lastAccessed": 1776201020175,
       "type": "file"
     },
     {
@@ -415,12 +421,6 @@
       "accessCount": 1,
       "lastAccessed": 1776195671936,
       "type": "directory"
-    },
-    {
-      "path": "frontend/scripts/deploy-local.sh",
-      "accessCount": 1,
-      "lastAccessed": 1776195997776,
-      "type": "file"
     },
     {
       "path": "LICENSE",
