@@ -52,6 +52,7 @@ Thumbs.db
 # Tool artifacts
 .playwright-mcp/
 .claude/
+frontend/.omc/
 
 # Stray local files
 Claude-Impressive Solidity smart contract projects.txt
