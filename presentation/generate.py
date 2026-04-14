@@ -1041,6 +1041,42 @@ def main():
     print("Fonts referenced by name: Inter (body), JetBrains Mono (code).")
     print(f"  Fallbacks: Helvetica Neue {ARROW} Calibri (body), Menlo {ARROW} Consolas (code).")
 
+    # Round-trip through LibreOffice (if installed) to produce strictly-conformant
+    # OOXML and also emit a PDF fallback. python-pptx output is technically valid
+    # but strict uploaders (Google Drive, Goodnotes) reject it; LibreOffice re-writes
+    # the OOXML in a form every viewer accepts.
+    import shutil
+    import subprocess
+    soffice = shutil.which("soffice") or (
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+        if Path("/Applications/LibreOffice.app/Contents/MacOS/soffice").exists()
+        else None
+    )
+    if soffice:
+        tmp_dir = Path("/tmp/lo-roundtrip-gen")
+        tmp_dir.mkdir(exist_ok=True)
+        try:
+            subprocess.run(
+                [soffice, "--headless", "--convert-to", "pptx", "--outdir", str(tmp_dir), str(out_path)],
+                check=True, capture_output=True, timeout=180,
+            )
+            roundtripped = tmp_dir / out_path.name
+            if roundtripped.exists() and roundtripped.stat().st_size > 0:
+                shutil.copy2(roundtripped, out_path)
+                print(f"LibreOffice round-trip: {out_path}  ({out_path.stat().st_size:,} bytes)")
+            subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(out_path.parent), str(out_path)],
+                check=True, capture_output=True, timeout=180,
+            )
+            pdf_path = out_path.with_suffix(".pdf")
+            if pdf_path.exists():
+                print(f"PDF fallback: {pdf_path}  ({pdf_path.stat().st_size:,} bytes)")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            print(f"WARNING: LibreOffice round-trip/PDF export failed: {e}")
+    else:
+        print("WARNING: LibreOffice not found — skipping round-trip and PDF export.")
+        print("  Install with: brew install --cask libreoffice")
+
 
 if __name__ == "__main__":
     main()

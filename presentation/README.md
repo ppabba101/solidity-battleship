@@ -7,7 +7,8 @@ Companion slide deck for the Solidity Battleship zk-SNARK overhaul.
 | File | Description |
 |---|---|
 | `generate.py` | python-pptx script that builds the deck |
-| `battleship-zk-demo.pptx` | Generated PowerPoint (9 slides, ~8 min) |
+| `battleship-zk-demo.pptx` | Generated PowerPoint (9 slides, ~8 min) — LibreOffice round-tripped |
+| `battleship-zk-demo.pdf` | PDF fallback (9 pages) — use this for uploaders that reject the pptx |
 
 ## Regenerate
 
@@ -120,14 +121,31 @@ Slide 7 is intentionally minimal — a single large "LIVE DEMO →" heading. The
 
 ## Compatibility
 
-The deck opens in PowerPoint, Keynote, Google Slides (Drive viewer), and Goodnotes. Three OOXML issues were fixed in April 2026 to achieve this:
+**Use the PDF for uploads.** Upload `battleship-zk-demo.pdf` to Google Drive, Goodnotes, email, Slack, or anywhere that is not a native PowerPoint editor — it is guaranteed to render everywhere. **Use the PPTX only if you need to edit the deck** in PowerPoint or Keynote.
 
-| Issue | Root cause | Fix applied |
-|---|---|---|
-| `type="screen4x3"` on a 16:9 canvas | python-pptx always writes `screen4x3` regardless of dimensions | Patched `sldSz type` to `"custom"` after creation in `new_prs()` |
-| Font references without fallback attributes | `<a:latin typeface="Inter"/>` had no `panose`, `pitchFamily`, or `charset`; Google/Goodnotes can't find Inter/JetBrains Mono and may error | Added `panose`, `pitchFamily="34"/"49"`, `charset="0"` to every latin element; added `<a:ea typeface="+mn-ea"/>` and `<a:cs typeface="+mn-cs"/>` siblings via `_apply_font_fallbacks()` |
-| `bentConnector3` with zero height | Arrow connectors between flow stations used connector type 2 (bent) producing degenerate `cy=0` geometry that strict parsers reject | Switched `add_connector(2, …)` to `add_connector(1, …)` — straight connector, same visual result for horizontal arrows |
+### Why two files
 
-**Validation performed:** python-pptx round-trip (load → save → reload, 9 slides), `xmllint --noout` on all slide/presentation/theme XML — zero errors.
+python-pptx produces OOXML that is technically valid (passes `xmllint`) but strict uploaders — Google Drive, Goodnotes, and some mail clients — reject it outright with "could not be imported." The root cause is subtle OOXML non-conformance that cannot be reliably hand-fixed. Our workaround is to round-trip the python-pptx output through LibreOffice, which re-writes the file as strictly-conformant OOXML that every viewer accepts, and to also emit a PDF as a bulletproof fallback.
 
-**Remaining caveat:** Inter and JetBrains Mono are not bundled in the file. Google Slides substitutes Calibri (body) and Courier New (mono) — the layout holds, but the exact typeface differs from PowerPoint/Keynote where the fonts are installed locally.
+### LibreOffice round-trip
+
+`generate.py` automatically shells out to LibreOffice at the end of `main()` if `soffice` is on `PATH` (or at `/Applications/LibreOffice.app/Contents/MacOS/soffice`). It performs two conversions:
+
+1. `soffice --headless --convert-to pptx --outdir /tmp/lo-roundtrip-gen battleship-zk-demo.pptx` — round-trips the python-pptx output and overwrites the original with LibreOffice's cleaner OOXML.
+2. `soffice --headless --convert-to pdf --outdir presentation battleship-zk-demo.pptx` — emits the PDF fallback alongside.
+
+Install LibreOffice with:
+
+```bash
+brew install --cask libreoffice
+```
+
+If LibreOffice is not installed, `generate.py` still writes the pptx but prints a warning and skips both the round-trip and PDF export.
+
+### Font substitution caveat
+
+LibreOffice will substitute Inter and JetBrains Mono with whatever it has available (typically DejaVu Sans and DejaVu Sans Mono) when rendering the PDF. The layout is preserved — line breaks, sizes, spacing, and color are all correct — but the exact typeface differs from a PowerPoint/Keynote render where Inter and JetBrains Mono are installed locally. This is acceptable: the goal is "file opens everywhere," not pixel-perfect typography on every surface.
+
+### History
+
+Three OOXML issues were hand-fixed in April 2026 before adopting the LibreOffice round-trip strategy: `sldSz type="screen4x3"` on a 16:9 canvas, font references without `panose`/`pitchFamily`/`charset` fallbacks, and `bentConnector3` shapes with zero height. Those fixes are preserved in `generate.py` and still run — the LibreOffice round-trip is defense-in-depth on top of them.
