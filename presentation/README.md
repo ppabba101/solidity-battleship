@@ -117,3 +117,17 @@ python3 -m pip install python-pptx pillow --break-system-packages
 ## Demo slide note
 
 Slide 7 is intentionally minimal — a single large "LIVE DEMO →" heading. The live application does the talking. Speaker notes for that slide contain a full script for both presenters: Pranav drives the UI while Vikram narrates the crypto log panel.
+
+## Compatibility
+
+The deck opens in PowerPoint, Keynote, Google Slides (Drive viewer), and Goodnotes. Three OOXML issues were fixed in April 2026 to achieve this:
+
+| Issue | Root cause | Fix applied |
+|---|---|---|
+| `type="screen4x3"` on a 16:9 canvas | python-pptx always writes `screen4x3` regardless of dimensions | Patched `sldSz type` to `"custom"` after creation in `new_prs()` |
+| Font references without fallback attributes | `<a:latin typeface="Inter"/>` had no `panose`, `pitchFamily`, or `charset`; Google/Goodnotes can't find Inter/JetBrains Mono and may error | Added `panose`, `pitchFamily="34"/"49"`, `charset="0"` to every latin element; added `<a:ea typeface="+mn-ea"/>` and `<a:cs typeface="+mn-cs"/>` siblings via `_apply_font_fallbacks()` |
+| `bentConnector3` with zero height | Arrow connectors between flow stations used connector type 2 (bent) producing degenerate `cy=0` geometry that strict parsers reject | Switched `add_connector(2, …)` to `add_connector(1, …)` — straight connector, same visual result for horizontal arrows |
+
+**Validation performed:** python-pptx round-trip (load → save → reload, 9 slides), `xmllint --noout` on all slide/presentation/theme XML — zero errors.
+
+**Remaining caveat:** Inter and JetBrains Mono are not bundled in the file. Google Slides substitutes Calibri (body) and Courier New (mono) — the layout holds, but the exact typeface differs from PowerPoint/Keynote where the fonts are installed locally.

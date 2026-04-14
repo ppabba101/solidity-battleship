@@ -39,6 +39,8 @@ from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.oxml.ns import qn
+from lxml import etree
 
 # ---------------------------------------------------------------------------
 # Palette
@@ -83,6 +85,11 @@ def new_prs() -> Presentation:
     prs = Presentation()
     prs.slide_width  = SLIDE_W
     prs.slide_height = SLIDE_H
+    # python-pptx defaults to type="screen4x3" even for 16:9 dimensions.
+    # Google Slides / Goodnotes reject the mismatch; "custom" is safe for any size.
+    sldSz = prs._element.find(qn("p:sldSz"))
+    if sldSz is not None:
+        sldSz.set("type", "custom")
     return prs
 
 
@@ -148,6 +155,40 @@ def add_oval(slide, left, top, width, height, fill_color=None, line_color=None):
     return shape
 
 
+def _apply_font_fallbacks(run, font_name: str):
+    """Add ea/cs typeface references so Google Slides / Goodnotes can substitute
+    the font gracefully when Inter or JetBrains Mono are unavailable.
+
+    We also add panose/pitchFamily/charset attributes to the latin element so
+    strict OOXML parsers (Google Slides, Goodnotes) can pick a good substitute
+    from system fonts rather than erroring out.
+
+    Inter  → sans-serif family (pitchFamily=34, panose for Helvetica-class)
+    JetBrains Mono → monospace family (pitchFamily=49, panose for Courier-class)
+    """
+    rPr = run._r.get_or_add_rPr()
+    # Remove any existing latin element so we can re-add with full attributes
+    for old in rPr.findall(qn("a:latin")):
+        rPr.remove(old)
+    latin = etree.SubElement(rPr, qn("a:latin"))
+    latin.set("typeface", font_name)
+    if font_name == BODY_FONT:  # Inter — sans-serif
+        latin.set("panose", "020B0604020202020204")
+        latin.set("pitchFamily", "34")
+        latin.set("charset", "0")
+    else:  # JetBrains Mono — monospace
+        latin.set("panose", "02070609020202020204")
+        latin.set("pitchFamily", "49")
+        latin.set("charset", "0")
+    # Ensure ea/cs inherit from theme so non-Latin scripts don't break
+    if not rPr.findall(qn("a:ea")):
+        ea = etree.SubElement(rPr, qn("a:ea"))
+        ea.set("typeface", "+mn-ea")
+    if not rPr.findall(qn("a:cs")):
+        cs = etree.SubElement(rPr, qn("a:cs"))
+        cs.set("typeface", "+mn-cs")
+
+
 def add_text(slide, left, top, width, height, text,
              font=BODY_FONT, size=18, bold=False, color=TEXT,
              align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP,
@@ -166,9 +207,9 @@ def add_text(slide, left, top, width, height, text,
     run.font.bold = bold
     run.font.color.rgb = color
     if tracking:
-        from pptx.oxml.ns import qn
         rPr = run._r.get_or_add_rPr()
         rPr.set("spc", str(tracking))
+    _apply_font_fallbacks(run, font)
     return tb, tf
 
 
@@ -187,12 +228,14 @@ def add_wordmark(slide):
     r1.font.size = Pt(10)
     r1.font.color.rgb = MUTED
     r1.font.bold = False
+    _apply_font_fallbacks(r1, CODE_FONT)
     r2 = p.add_run()
     r2.text = ".zk"
     r2.font.name = CODE_FONT
     r2.font.size = Pt(10)
     r2.font.color.rgb = ORANGE
     r2.font.bold = True
+    _apply_font_fallbacks(r2, CODE_FONT)
 
 
 def add_progress_bar(slide, n, total=TOTAL_SLIDES):
@@ -277,12 +320,13 @@ def add_flow_station(slide, left, top, width, height,
 
 
 def add_arrow(slide, x1, y1, x2, y2, color=ORANGE):
-    conn = slide.shapes.add_connector(2, x1, y1, x2, y2)
+    # Use connector type 1 (straightConnector1) instead of 2 (bentConnector3).
+    # bentConnector3 with cy=0 (horizontal arrows) produces degenerate geometry
+    # that strict parsers (Google Slides, Goodnotes) may reject.
+    conn = slide.shapes.add_connector(1, x1, y1, x2, y2)
     conn.line.color.rgb = color
     conn.line.width = Pt(1.75)
     line_elem = conn.line._get_or_add_ln()
-    from pptx.oxml.ns import qn
-    from lxml import etree
     tailEnd = etree.SubElement(line_elem, qn("a:tailEnd"))
     tailEnd.set("type", "triangle")
     tailEnd.set("w", "med")
@@ -432,6 +476,7 @@ def slide_2_problem(prs):
         r.font.size = Pt(38)
         r.font.bold = True
         r.font.color.rgb = TEXT if i == 0 else ORANGE
+        _apply_font_fallbacks(r, BODY_FONT)
 
     add_text(
         slide,
@@ -688,6 +733,7 @@ def slide_5_stack(prs):
             r.font.size = Pt(12)
             r.font.bold = False
             r.font.color.rgb = MUTED
+            _apply_font_fallbacks(r, BODY_FONT)
 
     notes = """\
 [Vikram]
