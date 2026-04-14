@@ -4,6 +4,38 @@ import {
   type PlayerIndex,
 } from "./burnerWallets";
 import { foundry } from "viem/chains";
+import { emit } from "./vizBus";
+
+type TxMethod = "createGame" | "commitBoard" | "fireShot" | "respondShot";
+
+function emitTxSent(method: TxMethod, hash: `0x${string}`) {
+  emit({ kind: "tx_sent", payload: { method, hash } });
+}
+
+async function emitTxMined(
+  method: TxMethod,
+  hash: `0x${string}`,
+  eventName?: string,
+) {
+  try {
+    const pub = getPublicClient();
+    const receipt = await pub.getTransactionReceipt({ hash });
+    emit({
+      kind: "tx_mined",
+      payload: {
+        method,
+        hash,
+        gasUsed: Number(receipt.gasUsed),
+        status: receipt.status,
+      },
+    });
+    if (eventName) {
+      emit({ kind: "event_log", payload: { name: eventName, txHash: hash } });
+    }
+  } catch {
+    /* receipt fetch failed; already mined by waitTx */
+  }
+}
 
 export const BATTLESHIP_ABI = [
   {
@@ -150,7 +182,9 @@ export async function createGame(
     chain: foundry,
   });
   const hash = await wallet.writeContract(request);
+  emitTxSent("createGame", hash);
   await waitTx(hash);
+  await emitTxMined("createGame", hash, "GameCreated");
   return { hash, gameId: result as bigint };
 }
 
@@ -169,7 +203,10 @@ export async function commitBoard(
     args: [gameId, commitment, proof],
     chain: foundry,
   });
-  return waitTx(hash);
+  emitTxSent("commitBoard", hash);
+  await waitTx(hash);
+  await emitTxMined("commitBoard", hash, "BoardCommitted");
+  return hash;
 }
 
 export async function fireShot(
@@ -187,7 +224,10 @@ export async function fireShot(
     args: [gameId, x, y],
     chain: foundry,
   });
-  return waitTx(hash);
+  emitTxSent("fireShot", hash);
+  await waitTx(hash);
+  await emitTxMined("fireShot", hash, "ShotFired");
+  return hash;
 }
 
 export async function respondShot(
@@ -205,7 +245,10 @@ export async function respondShot(
     args: [gameId, hit, proof],
     chain: foundry,
   });
-  return waitTx(hash);
+  emitTxSent("respondShot", hash);
+  await waitTx(hash);
+  await emitTxMined("respondShot", hash, "ShotResponded");
+  return hash;
 }
 
 export type GameEventHandlers = {

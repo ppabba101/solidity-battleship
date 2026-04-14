@@ -6,9 +6,9 @@
     "frontend"
   ],
   "scripts": {
-    "local-chain": "anvil",
+    "local-chain": "anvil --disable-code-size-limit",
     "contracts:test": "forge test -C contracts",
-    "deploy-local": "forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast -C contracts",
+    "deploy-local": "forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast --disable-code-size-limit -C contracts",
     "frontend:dev": "npm run dev --workspace frontend",
     "demo": "node scripts/demo.mjs"
   }

@@ -7,32 +7,19 @@ import {
 } from "./prover";
 import type { Fleet } from "./gameState";
 
-// The simulator wraps the stub prover so the viz layer sees a realistic
-// sequence of events even though the underlying proof is still a stub.
-// Once bb.js is wired in, swap the inner await out for the real call and
-// leave the event cadence unchanged.
+// Event-emitting wrapper around the real bb.js prover. The viz layer expects
+// a consistent sequence of lifecycle events; we emit them around the real
+// call so progress indicators, crypto log, and gas numbers all reflect the
+// actual work the browser is doing. Progress percentage is approximated from
+// wall-clock elapsed time against an empirically-tuned target duration (the
+// real UltraHonk prover exposes no intermediate progress hook).
 
-const TARGET_CONSTRAINTS = 3482;
+const TARGET_CONSTRAINTS = 1326;
+const ASSUMED_PROVING_MS = 15_000;
 let circuitCompiled = false;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function randomProofBytes(len = 384): `0x${string}` {
-  const bytes = new Uint8Array(len);
-  crypto.getRandomValues(bytes);
-  let hex = "0x";
-  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
-  return hex as `0x${string}`;
-}
-
-function fakeTxHash(): `0x${string}` {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  let hex = "0x";
-  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
-  return hex as `0x${string}`;
 }
 
 export interface SimulatedRunMeta {
@@ -41,7 +28,7 @@ export interface SimulatedRunMeta {
   publicInputs: Record<string, unknown>;
 }
 
-async function runWithViz<T>(
+async function runWithViz<T extends { proof: `0x${string}`; ms: number }>(
   meta: SimulatedRunMeta,
   inner: () => Promise<T>,
 ): Promise<T> {
@@ -55,7 +42,7 @@ async function runWithViz<T>(
       publicInputs: meta.publicInputs,
     },
   });
-  await sleep(800);
+  await sleep(250);
 
   if (!circuitCompiled) {
     emit({
@@ -63,7 +50,7 @@ async function runWithViz<T>(
       payload: { runId, circuit: "board_validity.nr" },
     });
     circuitCompiled = true;
-    await sleep(300);
+    await sleep(200);
   }
 
   emit({
@@ -75,12 +62,10 @@ async function runWithViz<T>(
     },
   });
 
-  // Drive a fake-but-monotonic constraint counter while the real prover runs.
   const startedAt = performance.now();
-  const totalMs = 3000 + Math.random() * 2000;
   const interval = window.setInterval(() => {
     const elapsed = performance.now() - startedAt;
-    const progress = Math.min(1, elapsed / totalMs);
+    const progress = Math.min(0.97, elapsed / ASSUMED_PROVING_MS);
     emit({
       kind: "proving_progress",
       payload: {
@@ -90,7 +75,7 @@ async function runWithViz<T>(
         constraints: Math.floor(progress * TARGET_CONSTRAINTS),
       },
     });
-  }, 100);
+  }, 200);
 
   let result: T;
   try {
@@ -99,13 +84,12 @@ async function runWithViz<T>(
     window.clearInterval(interval);
   }
 
-  const proofBytes = randomProofBytes();
   emit({
     kind: "proving_done",
     payload: {
       runId,
-      proofBytes,
-      elapsedMs: Math.round(performance.now() - startedAt),
+      proofBytes: result.proof,
+      elapsedMs: result.ms,
       constraints: TARGET_CONSTRAINTS,
     },
   });
@@ -113,34 +97,6 @@ async function runWithViz<T>(
   emit({
     kind: "verifier_call",
     payload: { runId, verifier: "HonkVerifier.verify" },
-  });
-  await sleep(400);
-
-  const txHash = fakeTxHash();
-  emit({
-    kind: "tx_sent",
-    payload: { runId, method: meta.method, hash: txHash },
-  });
-  await sleep(600);
-
-  emit({
-    kind: "tx_mined",
-    payload: {
-      runId,
-      method: meta.method,
-      hash: txHash,
-      gasUsed: meta.method === "commitBoard" ? 287_451 : 312_908,
-      status: "success",
-    },
-  });
-
-  emit({
-    kind: "event_log",
-    payload: {
-      runId,
-      name: meta.method === "commitBoard" ? "BoardCommitted" : "ShotResolved",
-      txHash,
-    },
   });
 
   return result;
