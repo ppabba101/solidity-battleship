@@ -1,0 +1,445 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776194904552,
+  "projectRoot": "/Users/pranavpabba/solidity-battleship",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {
+      "local-chain": "anvil",
+      "contracts:test": "forge test -C contracts",
+      "deploy-local": "forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast -C contracts",
+      "frontend:dev": "npm run dev --workspace frontend",
+      "demo": "node scripts/demo.mjs"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": true,
+    "workspaces": [
+      "frontend"
+    ],
+    "mainDirectories": [
+      "scripts"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "contracts": {
+      "path": "contracts",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776194904542,
+      "keyFiles": [
+        "foundry.lock",
+        "foundry.toml"
+      ]
+    },
+    "frontend": {
+      "path": "frontend",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1776194904544,
+      "keyFiles": [
+        "index.html",
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1776194904545,
+      "keyFiles": [
+        "demo.mjs"
+      ]
+    },
+    "contracts/lib": {
+      "path": "contracts/lib",
+      "purpose": "Library code",
+      "fileCount": 0,
+      "lastAccessed": 1776194904546,
+      "keyFiles": []
+    },
+    "contracts/out": {
+      "path": "contracts/out",
+      "purpose": "Build output",
+      "fileCount": 0,
+      "lastAccessed": 1776194904546,
+      "keyFiles": []
+    },
+    "contracts/src": {
+      "path": "contracts/src",
+      "purpose": "Source code",
+      "fileCount": 1,
+      "lastAccessed": 1776194904546,
+      "keyFiles": [
+        "BattleshipGame.sol"
+      ]
+    },
+    "contracts/test": {
+      "path": "contracts/test",
+      "purpose": "Test files",
+      "fileCount": 1,
+      "lastAccessed": 1776194904547,
+      "keyFiles": [
+        "BattleshipGame.t.sol"
+      ]
+    },
+    "frontend/dist": {
+      "path": "frontend/dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 1,
+      "lastAccessed": 1776194904547,
+      "keyFiles": [
+        "index.html"
+      ]
+    },
+    "frontend/node_modules": {
+      "path": "frontend/node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 0,
+      "lastAccessed": 1776194904547,
+      "keyFiles": []
+    },
+    "frontend/src": {
+      "path": "frontend/src",
+      "purpose": "Source code",
+      "fileCount": 3,
+      "lastAccessed": 1776194904547,
+      "keyFiles": [
+        "App.tsx",
+        "main.tsx",
+        "vite-env.d.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "frontend/src/App.tsx",
+      "accessCount": 18,
+      "lastAccessed": 1776197613855,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/gameState.ts",
+      "accessCount": 7,
+      "lastAccessed": 1776197764566,
+      "type": "file"
+    },
+    {
+      "path": "circuits/board_validity/src/main.nr",
+      "accessCount": 7,
+      "lastAccessed": 1776197846138,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/BattleshipGame.sol",
+      "accessCount": 7,
+      "lastAccessed": 1776198005145,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/PlacementBoard.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1776197831774,
+      "type": "file"
+    },
+    {
+      "path": "circuits/shot_response/src/main.nr",
+      "accessCount": 6,
+      "lastAccessed": 1776197859749,
+      "type": "file"
+    },
+    {
+      "path": "contracts/script/Deploy.s.sol",
+      "accessCount": 6,
+      "lastAccessed": 1776198019311,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/StatusBar.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1776197593574,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/Grid.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1776197768377,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/prover.ts",
+      "accessCount": 4,
+      "lastAccessed": 1776196273077,
+      "type": "file"
+    },
+    {
+      "path": "frontend/package.json",
+      "accessCount": 4,
+      "lastAccessed": 1776196276788,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/sfx.ts",
+      "accessCount": 4,
+      "lastAccessed": 1776197749580,
+      "type": "file"
+    },
+    {
+      "path": "presentation/generate.py",
+      "accessCount": 4,
+      "lastAccessed": 1776197771123,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ShipPalette.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1776197786747,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1776195805445,
+      "type": "file"
+    },
+    {
+      "path": "frontend/index.html",
+      "accessCount": 3,
+      "lastAccessed": 1776195807445,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/burnerWallets.ts",
+      "accessCount": 3,
+      "lastAccessed": 1776196053472,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/contract.ts",
+      "accessCount": 3,
+      "lastAccessed": 1776196274982,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/CryptoLog.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1776196298434,
+      "type": "file"
+    },
+    {
+      "path": "frontend/tailwind.config.ts",
+      "accessCount": 3,
+      "lastAccessed": 1776197512371,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/viz/ArchitectureFlow.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1776197549502,
+      "type": "file"
+    },
+    {
+      "path": "frontend/public/sfx/README.md",
+      "accessCount": 3,
+      "lastAccessed": 1776197746258,
+      "type": "file"
+    },
+    {
+      "path": "presentation/README.md",
+      "accessCount": 3,
+      "lastAccessed": 1776197812121,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/libraries/BoardValidator.sol",
+      "accessCount": 2,
+      "lastAccessed": 1776195664457,
+      "type": "file"
+    },
+    {
+      "path": "contracts/test/BattleshipGame.t.sol",
+      "accessCount": 2,
+      "lastAccessed": 1776195702621,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 2,
+      "lastAccessed": 1776196111655,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/provingSimulator.ts",
+      "accessCount": 2,
+      "lastAccessed": 1776196272715,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/utils.ts",
+      "accessCount": 2,
+      "lastAccessed": 1776196275688,
+      "type": "file"
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "accessCount": 2,
+      "lastAccessed": 1776196276736,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/WinScreen.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776196298768,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/vizBus.ts",
+      "accessCount": 2,
+      "lastAccessed": 1776196300835,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/index.css",
+      "accessCount": 2,
+      "lastAccessed": 1776197511933,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ui/badge.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776197521020,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/verifiers/BoardValidityVerifier.sol",
+      "accessCount": 2,
+      "lastAccessed": 1776197953404,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/merkle.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776195051571,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/BoardGrid.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776195069359,
+      "type": "file"
+    },
+    {
+      "path": "circuits/README.md",
+      "accessCount": 1,
+      "lastAccessed": 1776195592664,
+      "type": "file"
+    },
+    {
+      "path": "circuits/board_validity/Nargo.toml",
+      "accessCount": 1,
+      "lastAccessed": 1776195594251,
+      "type": "file"
+    },
+    {
+      "path": "circuits/shot_response/Nargo.toml",
+      "accessCount": 1,
+      "lastAccessed": 1776195620537,
+      "type": "file"
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776195627510,
+      "type": "file"
+    },
+    {
+      "path": "contracts/src/verifiers/ShotResponseVerifier.sol",
+      "accessCount": 1,
+      "lastAccessed": 1776195630245,
+      "type": "file"
+    },
+    {
+      "path": "frontend/postcss.config.js",
+      "accessCount": 1,
+      "lastAccessed": 1776195635920,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ui/button.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776195645968,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ui/card.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776195652266,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ui/dialog.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776195666180,
+      "type": "file"
+    },
+    {
+      "path": "contracts",
+      "accessCount": 1,
+      "lastAccessed": 1776195671936,
+      "type": "directory"
+    },
+    {
+      "path": "frontend/scripts/deploy-local.sh",
+      "accessCount": 1,
+      "lastAccessed": 1776195997776,
+      "type": "file"
+    },
+    {
+      "path": "LICENSE",
+      "accessCount": 1,
+      "lastAccessed": 1776196096115,
+      "type": "file"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "accessCount": 1,
+      "lastAccessed": 1776196120534,
+      "type": "file"
+    },
+    {
+      "path": "docs/github-setup.md",
+      "accessCount": 1,
+      "lastAccessed": 1776196127133,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
