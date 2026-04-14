@@ -197,6 +197,37 @@ export async function commitmentFor(
 // Proof generation.
 // ---------------------------------------------------------------------------
 
+// Demo-mode stub path. Set VITE_PROVER_MODE=stub in frontend/.env.local to
+// skip real bb.js proving entirely. The commitment is still computed for
+// real, and publicInputs are the correct length — but the proof bytes are a
+// placeholder. Pair with FAKE_VERIFIERS=1 on the contracts side so the
+// MockVerifier accepts any proof. Used when the 30–60s real proving time is
+// too slow for a live demo.
+const PROVER_MODE = (import.meta.env.VITE_PROVER_MODE as string | undefined) ?? "real";
+const STUB = PROVER_MODE === "stub";
+
+const STUB_DELAY_MS_MIN = 2500;
+const STUB_DELAY_MS_RANGE = 2000;
+const ACCUMULATOR_PADDING_FIELDS = 8;
+
+function stubProofBytes(): `0x${string}` {
+  return ("0x" + "ab".repeat(128)) as `0x${string}`;
+}
+
+function stubAccumulator(): `0x${string}`[] {
+  // 8 deterministic-but-distinct 32-byte values standing in for the UltraHonk
+  // pairing accumulator. MockVerifier doesn't read them; we just need the
+  // array to be the right length.
+  return Array.from({ length: ACCUMULATOR_PADDING_FIELDS }, (_, i) => {
+    const hex = (i + 1).toString(16).padStart(64, "0");
+    return ("0x" + hex) as `0x${string}`;
+  });
+}
+
+function randomDelayMs(): number {
+  return STUB_DELAY_MS_MIN + Math.random() * STUB_DELAY_MS_RANGE;
+}
+
 export async function proveBoardValidity(
   fleet: Fleet,
   salt: `0x${string}`,
@@ -204,6 +235,16 @@ export async function proveBoardValidity(
   const start = performance.now();
   const ordered = canonicalFleet(fleet);
   const commitment = await commitmentFor(fleet, salt);
+
+  if (STUB) {
+    await new Promise((r) => setTimeout(r, randomDelayMs()));
+    return {
+      commitment,
+      proof: stubProofBytes(),
+      publicInputs: [commitment, ...stubAccumulator()],
+      ms: Math.round(performance.now() - start),
+    };
+  }
 
   const shipX = ordered.map((s) => s.x.toString());
   const shipY = ordered.map((s) => s.y.toString());
@@ -239,6 +280,19 @@ export async function proveShotResponse(
   const board = boardFromFleet(fleet);
   const hit = board[y * 10 + x] === 1;
   const commitment = await commitmentFor(fleet, salt);
+
+  if (STUB) {
+    await new Promise((r) => setTimeout(r, randomDelayMs()));
+    const xHex = ("0x" + x.toString(16).padStart(64, "0")) as `0x${string}`;
+    const yHex = ("0x" + y.toString(16).padStart(64, "0")) as `0x${string}`;
+    const hitHex = ("0x" + (hit ? "01".padStart(64, "0") : "00".padStart(64, "0"))) as `0x${string}`;
+    return {
+      hit,
+      proof: stubProofBytes(),
+      publicInputs: [commitment, xHex, yHex, hitHex, ...stubAccumulator()],
+      ms: Math.round(performance.now() - start),
+    };
+  }
 
   const boardInput = board.map((v) => v.toString());
   const { noir, backend } = await getShotProver();
