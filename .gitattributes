@@ -1,0 +1,10 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Language detection
+*.sol linguist-language=Solidity
+*.nr linguist-language=Rust
+
+# Binary files
+*.pptx binary
+*.mp3 binary

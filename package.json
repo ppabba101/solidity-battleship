@@ -1,0 +1,15 @@
+{
+  "name": "solidity-battleship",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "local-chain": "anvil",
+    "contracts:test": "forge test -C contracts",
+    "deploy-local": "forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast -C contracts",
+    "frontend:dev": "npm run dev --workspace frontend",
+    "demo": "node scripts/demo.mjs"
+  }
+}
