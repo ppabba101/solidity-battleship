@@ -1,0 +1,7 @@
+[package]
+name = "shot_response"
+type = "bin"
+authors = ["battleship-zk-demo"]
+compiler_version = ">=0.34.0"
+
+[dependencies]
