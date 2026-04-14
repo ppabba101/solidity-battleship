@@ -165,6 +165,12 @@
       "type": "file"
     },
     {
+      "path": "presentation/generate.py",
+      "accessCount": 7,
+      "lastAccessed": 1776198353740,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/components/PlacementBoard.tsx",
       "accessCount": 6,
       "lastAccessed": 1776197831774,
@@ -213,15 +219,15 @@
       "type": "file"
     },
     {
-      "path": "presentation/generate.py",
-      "accessCount": 4,
-      "lastAccessed": 1776197771123,
-      "type": "file"
-    },
-    {
       "path": "frontend/src/components/ShipPalette.tsx",
       "accessCount": 4,
       "lastAccessed": 1776197786747,
+      "type": "file"
+    },
+    {
+      "path": "presentation/README.md",
+      "accessCount": 4,
+      "lastAccessed": 1776198343303,
       "type": "file"
     },
     {
@@ -270,12 +276,6 @@
       "path": "frontend/public/sfx/README.md",
       "accessCount": 3,
       "lastAccessed": 1776197746258,
-      "type": "file"
-    },
-    {
-      "path": "presentation/README.md",
-      "accessCount": 3,
-      "lastAccessed": 1776197812121,
       "type": "file"
     },
     {
