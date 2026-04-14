@@ -73,6 +73,9 @@ export default function App() {
   // Always read latest player states inside async handlers.
   const p1Ref = useRef(p1);
   const p2Ref = useRef(p2);
+  // Hard lock against concurrent shot rounds. Set synchronously before any
+  // async work in fireShot so rapid clicks can't overlap rounds.
+  const inRoundRef = useRef(false);
   useEffect(() => {
     p1Ref.current = p1;
   }, [p1]);
@@ -215,7 +218,17 @@ export default function App() {
 
   const fireShot = async (i: number) => {
     if (phase !== "playing") return;
+    if (inRoundRef.current) return;
     if (current.enemyCells[i] !== "UNKNOWN") return;
+    inRoundRef.current = true;
+    try {
+      await runShotRound(i);
+    } finally {
+      inRoundRef.current = false;
+    }
+  };
+
+  const runShotRound = async (i: number) => {
     const x = i % BOARD_SIZE;
     const y = Math.floor(i / BOARD_SIZE);
     playSfx("fire", muted);
