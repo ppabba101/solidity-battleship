@@ -53,11 +53,12 @@ An ASCII version of the idea, trimmed to four leaves so it fits:
 A zk-SNARK lets you prove a statement of the form "I know some private witness `w` such that `C(w, x) = true`" where `C` is an arbitrary constraint system and `x` is public. The verifier learns *nothing about `w`*, only that the statement holds. In Battleship the statement we want is:
 
 > I know a 100-element private array `board` and a private salt `s` such that
->  1. the sum of `board` is exactly 17,
->  2. every run of 1-cells in any row or column has length in {2, 3, 4, 5} and no length-1 runs,
->  3. the row/column run-length multiset is exactly {one 5, one 4, two 3s, one 2},
->  4. there are no two ships touching diagonally,
->  5. `pedersen_hash(board, s) == commitment`, where `commitment` is public.
+>
+> 1. the sum of `board` is exactly 17,
+> 2. every run of 1-cells in any row or column has length in {2, 3, 4, 5} and no length-1 runs,
+> 3. the row/column run-length multiset is exactly {one 5, one 4, two 3s, one 2},
+> 4. there are no two ships touching diagonally,
+> 5. `pedersen_hash(board, s) == commitment`, where `commitment` is public.
 
 That's one SNARK. The proof is a few hundred bytes; verification on-chain is constant-size and takes about 250k gas with the UltraPlonk / Honk backend. **The proof itself IS the validity certificate.** It is generated once, at commit time, before any shot. Once the contract has accepted it, you cannot have committed to an illegal board, full stop. The all-empty-board exploit dies at the door because no such witness satisfies constraint (1).
 
@@ -100,13 +101,13 @@ A full round from the user's point of view:
 
 1. **P1 places fleet.** Pranav drags a carrier from the palette, clicks to rotate, drops it. Repeats for the other four ships. The React state holds the `board: number[100]` and a per-game random `salt`.
 2. **P1 clicks Ready.** The frontend calls `prover.proveBoardValidity(board, salt)`. In production this would run `bb.js` against `board_validity.nr`; in the demo we call `provingSimulator.ts` which waits ~4 seconds and emits realistic `VizBus` events so the proving panel animates through its states (witness gen → constraint check → proof gen → done, with the 3,482 constraint counter ticking up).
-3. **`commitBoard` transaction.** The frontend submits the proof blob plus the Pedersen commitment to `BattleshipGame.commitBoard(gameId, commitment, proof)`.
+3. `**commitBoard` transaction.** The frontend submits the proof blob plus the Pedersen commitment to `BattleshipGame.commitBoard(gameId, commitment, proof)`.
 4. **On-chain verification.** The contract calls `BoardValidityVerifier.verify(proof, [commitment])`. The verifier is the 2,460-line Solidity contract Noir generated. If it returns false, the tx reverts. If it returns true, the game stores `commitments[player] = commitment` and emits `BoardCommitted`.
 5. **Hot-seat switch.** The frontend flips to player two. P2 does the same dance.
 6. **Both committed → Playing phase.** The contract's state machine moves from `Committed` to `Playing`.
 7. **P1 fires.** Pranav clicks `(3, 5)` on the opponent grid. The frontend calls `fireShot(gameId, x, y)`; the tx only records the coordinate and emits `ShotFired`. No proof here — it's just "I am taking a shot."
 8. **P2 computes the answer locally.** The frontend, which knows P2's private board, computes `hit = board[y*10+x]` and calls `prover.proveShotResponse(...)`.
-9. **`respondShot` transaction.** Frontend calls `respondShot(gameId, x, y, hit, proof)`. Contract calls `ShotResponseVerifier.verify(proof, [commitment, x, y, hit])`. If verified, contract updates `shots[]`, increments `hitCount[shooter]`, and emits `ShotResolved`.
+9. `**respondShot` transaction.** Frontend calls `respondShot(gameId, x, y, hit, proof)`. Contract calls `ShotResponseVerifier.verify(proof, [commitment, x, y, hit])`. If verified, contract updates `shots[]`, increments `hitCount[shooter]`, and emits `ShotResolved`.
 10. **Frontend reacts.** Hit animation, sunk animation if `hitCount[shooter]` crossed a ship's worth of cells in contiguous positions (frontend-only heuristic, purely visual), turn swap, Crypto Log panel narrates every event it sees on `watchGameEvents`.
 11. **Repeat** until one player has 17 hits. Contract emits `GameWon`, frontend fires confetti.
 
@@ -114,29 +115,31 @@ A full round from the user's point of view:
 
 ## 6. Files and where things live
 
-| Path | Role |
-|---|---|
-| `contracts/src/BattleshipGame.sol` | Top-level state machine: `Created` → `Committed` → `Playing` → `Finished`. Holds commitments, shot history, turn pointer. |
-| `contracts/src/verifiers/BoardValidityVerifier.sol` | 2,460-line Noir-generated `HonkVerifier` for `board_validity.nr`. |
-| `contracts/src/verifiers/ShotResponseVerifier.sol` | Same shape, for `shot_response.nr`. |
-| `contracts/script/Deploy.s.sol` | Foundry deploy script; wires the verifiers into the game contract. |
-| `contracts/test/BattleshipGame.t.sol` | End-to-end Foundry tests, including a "commit an illegal board, expect revert" case. |
-| `circuits/board_validity/src/main.nr` | The fleet-validity circuit. 3,482 constraints. |
-| `circuits/shot_response/src/main.nr` | Single-cell consistency circuit. |
-| `circuits/*/Nargo.toml` | Noir package manifests. |
-| `frontend/src/App.tsx` | Top-level phase machine: placement / playing / finished. |
-| `frontend/src/lib/contract.ts` | viem ABI plus helpers: `createGame`, `commitBoard`, `fireShot`, `respondShot`, `watchGameEvents`. |
-| `frontend/src/lib/burnerWallets.ts` | Anvil account 0 and account 1 wrapped as `privateKeyToAccount` burner wallets so there are no MetaMask popups. |
-| `frontend/src/lib/prover.ts` | The real prover interface. Delegates to either bb.js or the simulator. |
-| `frontend/src/lib/provingSimulator.ts` | Stub prover. Emits VizBus events with a 3–5 s fake delay and the real 3,482 constraint counter, so the demo feels like the real thing without bundling 40 MB of WASM. |
-| `frontend/src/components/PlacementBoard.tsx` | Drag / click-to-place / click-to-rotate grid. |
-| `frontend/src/components/ShipPalette.tsx` | Ship selector. |
-| `frontend/src/components/viz/ArchitectureFlow.tsx` | The animated BRD → PSD → NOR → UPL → VER → GME strip used in the UI and mirrored on slide 8. |
-| `frontend/src/components/viz/BoardToHashViz.tsx` | Visual showing the cells collapsing into a hash. |
-| `frontend/src/components/viz/CircuitStatsCard.tsx` | Live constraint counter card. |
-| `frontend/src/components/viz/ChainPanel.tsx` | On-chain event log ("Crypto Log"). |
-| `frontend/src/components/viz/ProvingPanel.tsx` | State-machine panel for the proving lifecycle. |
-| `frontend/src/components/viz/VizLayer.tsx` | Shared overlay container and VizBus subscriber. |
+
+| Path                                                | Role                                                                                                                                                                  |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contracts/src/BattleshipGame.sol`                  | Top-level state machine: `Created` → `Committed` → `Playing` → `Finished`. Holds commitments, shot history, turn pointer.                                             |
+| `contracts/src/verifiers/BoardValidityVerifier.sol` | 2,460-line Noir-generated `HonkVerifier` for `board_validity.nr`.                                                                                                     |
+| `contracts/src/verifiers/ShotResponseVerifier.sol`  | Same shape, for `shot_response.nr`.                                                                                                                                   |
+| `contracts/script/Deploy.s.sol`                     | Foundry deploy script; wires the verifiers into the game contract.                                                                                                    |
+| `contracts/test/BattleshipGame.t.sol`               | End-to-end Foundry tests, including a "commit an illegal board, expect revert" case.                                                                                  |
+| `circuits/board_validity/src/main.nr`               | The fleet-validity circuit. 3,482 constraints.                                                                                                                        |
+| `circuits/shot_response/src/main.nr`                | Single-cell consistency circuit.                                                                                                                                      |
+| `circuits/*/Nargo.toml`                             | Noir package manifests.                                                                                                                                               |
+| `frontend/src/App.tsx`                              | Top-level phase machine: placement / playing / finished.                                                                                                              |
+| `frontend/src/lib/contract.ts`                      | viem ABI plus helpers: `createGame`, `commitBoard`, `fireShot`, `respondShot`, `watchGameEvents`.                                                                     |
+| `frontend/src/lib/burnerWallets.ts`                 | Anvil account 0 and account 1 wrapped as `privateKeyToAccount` burner wallets so there are no MetaMask popups.                                                        |
+| `frontend/src/lib/prover.ts`                        | The real prover interface. Delegates to either bb.js or the simulator.                                                                                                |
+| `frontend/src/lib/provingSimulator.ts`              | Stub prover. Emits VizBus events with a 3–5 s fake delay and the real 3,482 constraint counter, so the demo feels like the real thing without bundling 40 MB of WASM. |
+| `frontend/src/components/PlacementBoard.tsx`        | Drag / click-to-place / click-to-rotate grid.                                                                                                                         |
+| `frontend/src/components/ShipPalette.tsx`           | Ship selector.                                                                                                                                                        |
+| `frontend/src/components/viz/ArchitectureFlow.tsx`  | The animated BRD → PSD → NOR → UPL → VER → GME strip used in the UI and mirrored on slide 8.                                                                          |
+| `frontend/src/components/viz/BoardToHashViz.tsx`    | Visual showing the cells collapsing into a hash.                                                                                                                      |
+| `frontend/src/components/viz/CircuitStatsCard.tsx`  | Live constraint counter card.                                                                                                                                         |
+| `frontend/src/components/viz/ChainPanel.tsx`        | On-chain event log ("Crypto Log").                                                                                                                                    |
+| `frontend/src/components/viz/ProvingPanel.tsx`      | State-machine panel for the proving lifecycle.                                                                                                                        |
+| `frontend/src/components/viz/VizLayer.tsx`          | Shared overlay container and VizBus subscriber.                                                                                                                       |
+
 
 ---
 
@@ -180,3 +183,4 @@ A full round from the user's point of view:
 ## 10. Thirty-second elevator script (memorise this)
 
 > Battleship is a game of hidden state. Nothing stops a digital player from lying, so we need to prove the board is legal without revealing it. A Merkle tree commits to the cells but can't prove they form a real fleet — you can commit an empty grid and win by answering "miss" forever. We fixed that with a Noir zk-SNARK: one proof, generated in the browser with bb.js, that the private 100-cell board has exactly the standard fleet and its Pedersen hash matches the public commitment. The contract verifies it once for 250k gas and the game begins. Every shot response is a second, smaller proof against the same commitment. No trusted setup, no backend, no opponent trust.
+
