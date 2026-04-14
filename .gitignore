@@ -57,5 +57,3 @@ frontend/.omc/
 # Stray local files
 Claude-Impressive Solidity smart contract projects.txt
 
-# Generated audio placeholders (keep README in that dir)
-frontend/public/sfx/*.mp3
