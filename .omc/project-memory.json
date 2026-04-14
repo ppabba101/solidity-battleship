@@ -147,6 +147,12 @@
       "type": "file"
     },
     {
+      "path": "presentation/generate.py",
+      "accessCount": 9,
+      "lastAccessed": 1776198715989,
+      "type": "file"
+    },
+    {
       "path": "frontend/src/lib/gameState.ts",
       "accessCount": 7,
       "lastAccessed": 1776197764566,
@@ -162,12 +168,6 @@
       "path": "contracts/src/BattleshipGame.sol",
       "accessCount": 7,
       "lastAccessed": 1776198005145,
-      "type": "file"
-    },
-    {
-      "path": "presentation/generate.py",
-      "accessCount": 7,
-      "lastAccessed": 1776198353740,
       "type": "file"
     },
     {
