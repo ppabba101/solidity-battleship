@@ -333,6 +333,9 @@ export function randomSalt(): `0x${string}` {
   crypto.getRandomValues(bytes);
   // Clamp to the BN254 scalar field by masking the top 2 bits; this is far
   // below the actual field modulus but guarantees `salt` is a valid Field.
-  bytes[0] &= 0x3f;
+  // BN254 field modulus top byte is 0x30; mask to 0x0f to guarantee we're
+  // safely below the field order. 0x3f was too loose (top 2 bits cleared still
+  // allows 0x30-0x3f which can exceed the modulus).
+  bytes[0] &= 0x0f;
   return toHex(bytes) as Hex;
 }
