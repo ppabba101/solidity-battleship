@@ -57,3 +57,4 @@ frontend/.omc/
 # Stray local files
 Claude-Impressive Solidity smart contract projects.txt
 
+frontend/.env.local

@@ -1,6 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { RouterProvider } from "react-router-dom";
+import { PrivyProvider } from "@privy-io/react-auth";
 import App from "./App";
+import { router } from "./router";
 import "./index.css";
 
 // --- CRS proxy shim ---------------------------------------------------------
@@ -28,8 +31,38 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
 }) as typeof window.fetch;
 // ---------------------------------------------------------------------------
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const env = import.meta.env as Record<string, string | undefined>;
+const privyAppId = env.VITE_PRIVY_APP_ID;
+const localHotseat = env.VITE_LOCAL_HOTSEAT === "1";
+
+// Hot-seat bypass: when explicitly requested OR when no Privy app id is
+// configured, mount the legacy single-page <App /> at root. This keeps
+// `scripts/demo-fast.sh` working without a Privy account and gives dev a
+// zero-config path.
+const bypassPrivy = localHotseat || !privyAppId;
+
+const root = createRoot(document.getElementById("root")!);
+
+if (bypassPrivy) {
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+} else {
+  root.render(
+    <React.StrictMode>
+      <PrivyProvider
+        appId={privyAppId!}
+        config={{
+          embeddedWallets: {
+            ethereum: { createOnLogin: "users-without-wallets" },
+          },
+          loginMethods: ["email", "wallet"],
+        }}
+      >
+        <RouterProvider router={router} />
+      </PrivyProvider>
+    </React.StrictMode>,
+  );
+}
