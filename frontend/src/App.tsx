@@ -218,7 +218,9 @@ export default function App() {
             chainMs,
             totalMs,
             proofBytes: Math.max(0, (proof.length - 2) / 2),
-            proofPreview: proof.slice(0, 102),
+            // Skip the zero-padded public-inputs-size header at the start
+            // of the proof and show 100 chars of real high-entropy bytes.
+            proofPreview: proof.slice(300, 400),
           },
         );
       } catch (e) {
@@ -334,7 +336,9 @@ export default function App() {
             chainMs,
             totalMs,
             proofBytes: Math.max(0, (proof.length - 2) / 2),
-            proofPreview: proof.slice(0, 102),
+            // Skip the zero-padded public-inputs-size header at the start
+            // of the proof and show 100 chars of real high-entropy bytes.
+            proofPreview: proof.slice(300, 400),
           },
         );
       } catch (e) {

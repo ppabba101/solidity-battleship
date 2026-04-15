@@ -31,6 +31,7 @@ export function getWalletClient(player: PlayerIndex): WalletClient {
     account,
     chain: foundry,
     transport: http(ANVIL_RPC),
+    pollingInterval: 150,
   });
 }
 
@@ -38,5 +39,9 @@ export function getPublicClient(): PublicClient {
   return createPublicClient({
     chain: foundry,
     transport: http(ANVIL_RPC),
+    // Anvil auto-mines instantly; viem's default 4s polling interval adds
+    // ~4s of fake latency to every waitForTransactionReceipt call. Tighten
+    // it so "verify+tx" reflects actual contract execution time instead.
+    pollingInterval: 150,
   });
 }
