@@ -1,70 +1,77 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { subscribe, type VizEvent } from "../../lib/vizBus";
+import type { Fleet } from "../../lib/gameState";
+import { shipCells, idx as cellIdx } from "../../lib/gameState";
 
-// Lights up 17 ship cells one-by-one then resolves into a Poseidon commitment.
-// Triggers on any `board_hash` event that carries a commitment-shaped payload.
+// Shows the current player's real fleet as an orange grid and streams the
+// real pedersen commitment hex once it has been proven. Props-driven so
+// switching players re-animates with the other player's values; going back
+// to placement (null commitment) hides the viz.
 
 const CELL = 18;
 const GRID = 10;
 
-export function BoardToHashViz() {
+export interface BoardToHashVizProps {
+  fleet: Fleet;
+  commitment: `0x${string}` | null;
+  salt: `0x${string}`;
+}
+
+export function BoardToHashViz({ fleet, commitment, salt }: BoardToHashVizProps) {
   const [lit, setLit] = useState<number[]>([]);
   const [byteCursor, setByteCursor] = useState(0);
-  const [commitment, setCommitment] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
 
+  // Derive the real ship cells from the fleet.
+  const shipCellIndices = fleet.flatMap((ship) =>
+    shipCells(ship).map((c) => cellIdx(c.x, c.y)),
+  );
+
+  // Re-run the animation whenever the real commitment changes (including
+  // clearing to null). Tied to commitment + fleet reference so switching
+  // players refreshes everything.
   useEffect(() => {
-    const unsub = subscribe((e: VizEvent) => {
-      if (e.kind !== "board_hash") return;
-      if ((e.payload?.label as string) !== "board_validity") return;
-      const hex =
-        "0x" +
-        Array.from(crypto.getRandomValues(new Uint8Array(32)))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-      setCommitment(hex);
+    if (!commitment) {
       setLit([]);
       setByteCursor(0);
-      setRunning(true);
-
-      // 17 ship cells placed at arbitrary-but-stable indices.
-      const cells: number[] = [];
-      for (let i = 0; i < 17; i++) cells.push((i * 7 + 3) % 100);
-
-      cells.forEach((cell, i) => {
+      return;
+    }
+    setLit([]);
+    setByteCursor(0);
+    const timers: number[] = [];
+    shipCellIndices.forEach((cell, i) => {
+      timers.push(
         window.setTimeout(() => {
           setLit((l) => [...l, cell]);
-        }, i * 90);
-      });
-
+        }, i * 90),
+      );
+    });
+    timers.push(
       window.setTimeout(() => {
-        // Stream bytes.
         const id = window.setInterval(() => {
           setByteCursor((c) => {
             const next = c + 4;
-            if (next >= hex.length) {
+            if (next >= commitment.length) {
               window.clearInterval(id);
-              return hex.length;
+              return commitment.length;
             }
             return next;
           });
         }, 40);
-      }, 17 * 90);
+        timers.push(id);
+      }, shipCellIndices.length * 90),
+    );
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitment]);
 
-      window.setTimeout(() => {
-        setRunning(false);
-      }, 2800);
-    });
-    return unsub;
-  }, []);
-
-  if (!running && !commitment) return null;
+  if (!commitment) return null;
 
   return (
     <div className="p-4 rounded-xl border border-navy-light bg-navy/80 font-mono text-[10px]">
       <div className="text-[10px] uppercase tracking-widest text-orange font-semibold mb-3">
-        Poseidon(board ∥ salt)
+        pedersen(board ∥ salt)
       </div>
       <div className="flex items-start gap-3">
         <svg
@@ -85,9 +92,7 @@ export function BoardToHashViz() {
                 height={CELL - 2}
                 rx={2}
                 fill={on ? "#F97316" : "#13315C"}
-                animate={{
-                  opacity: on ? 1 : 0.4,
-                }}
+                animate={{ opacity: on ? 1 : 0.4 }}
               />
             );
           })}
@@ -97,13 +102,23 @@ export function BoardToHashViz() {
             commitment
           </div>
           <div className="text-orange break-all leading-[1.35] text-[10px] mt-0.5 max-w-full">
-            {commitment ? commitment.slice(0, byteCursor) || "…" : "…"}
-            <span className="inline-block w-[5px] h-[9px] bg-orange animate-pulse align-middle ml-0.5" />
+            {commitment.slice(0, byteCursor) || "…"}
+            {byteCursor < commitment.length && (
+              <span className="inline-block w-[5px] h-[9px] bg-orange animate-pulse align-middle ml-0.5" />
+            )}
+          </div>
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 mt-2">
+            salt (private)
+          </div>
+          <div className="text-slate-400 break-all leading-[1.35] text-[10px] mt-0.5">
+            {salt.slice(0, 22)}…
           </div>
           <div className="text-[9px] uppercase tracking-wider text-slate-500 mt-2">
             cells lit
           </div>
-          <div className="text-slate-100 tabular-nums">{lit.length}/17</div>
+          <div className="text-slate-100 tabular-nums">
+            {lit.length}/{shipCellIndices.length || 17}
+          </div>
         </div>
       </div>
     </div>

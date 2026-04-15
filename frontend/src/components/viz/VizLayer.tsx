@@ -2,6 +2,7 @@ import { ArchitectureFlow } from "./ArchitectureFlow";
 import { ProvingPanel } from "./ProvingPanel";
 import { BoardToHashViz } from "./BoardToHashViz";
 import { ChainPanel } from "./ChainPanel";
+import type { Fleet } from "../../lib/gameState";
 
 // Top-of-screen pipeline diagram + proving modal.
 // Side-rail panels are exported separately and composed into App.tsx's sidebar.
@@ -20,10 +21,16 @@ export function VizLayer() {
   );
 }
 
-export function VizSidebar() {
+export interface VizSidebarProps {
+  fleet: Fleet;
+  commitment: `0x${string}` | null;
+  salt: `0x${string}`;
+}
+
+export function VizSidebar({ fleet, commitment, salt }: VizSidebarProps) {
   return (
     <div className="space-y-3 min-w-0">
-      <BoardToHashViz />
+      <BoardToHashViz fleet={fleet} commitment={commitment} salt={salt} />
       <ChainPanel />
     </div>
   );

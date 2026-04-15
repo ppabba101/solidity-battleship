@@ -43,6 +43,9 @@ type Phase = "placement" | "playing" | "finished";
 interface PlayerState {
   fleet: Fleet;
   salt: `0x${string}`;
+  // Real pedersen commitment of this player's board, set after onReady.
+  // Null until the player has proven + committed.
+  commitment: `0x${string}` | null;
   ownCells: CellState[];
   enemyCells: CellState[];
   shots: number;
@@ -56,6 +59,7 @@ function blankPlayer(): PlayerState {
   return {
     fleet: [],
     salt: randomSalt(),
+    commitment: null,
     ownCells: Array(BOARD_CELLS).fill("EMPTY"),
     enemyCells: Array(BOARD_CELLS).fill("UNKNOWN"),
     shots: 0,
@@ -239,6 +243,7 @@ export default function App() {
 
       setCurrent({
         ...current,
+        commitment,
         ownCells: placeFleet(current.fleet),
       });
       const otherReady = (player === 0 ? p2 : p1).fleet.length === 5;
@@ -524,7 +529,12 @@ export default function App() {
         </main>
         <aside className="w-96 shrink-0 border-l border-navy-light bg-navy/60 flex flex-col overflow-y-auto">
           <div className="p-3 border-b border-navy-light">
-            <VizSidebar key={`viz-sidebar-${resetKey}`} />
+            <VizSidebar
+              key={`viz-sidebar-${resetKey}`}
+              fleet={current.fleet}
+              commitment={current.commitment}
+              salt={current.salt}
+            />
           </div>
           <CryptoLog entries={log} />
         </aside>
