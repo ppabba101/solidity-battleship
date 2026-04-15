@@ -1,0 +1,219 @@
+# Deep Interview Spec: Battleship.zk — Real Multiplayer Game
+
+## Metadata
+- Interview ID: real-battleship-game
+- Rounds: 6
+- Final Ambiguity: 18%
+- Type: brownfield (extends current demo)
+- Status: PASSED
+- Threshold: 20%
+
+## Clarity Breakdown
+| Dimension | Score | Weight | Weighted |
+|---|---|---|---|
+| Goal Clarity | 0.85 | 35% | 0.298 |
+| Constraint Clarity | 0.85 | 25% | 0.213 |
+| Success Criteria | 0.75 | 25% | 0.188 |
+| Context Clarity | 0.85 | 15% | 0.128 |
+| **Total Clarity** | | | **0.826** |
+| **Ambiguity** | | | **17.4%** |
+
+## Goal
+
+Take the current single-machine hot-seat Battleship.zk demo and ship a **publicly playable multiplayer version** that two strangers on two separate browsers can play against each other with real zk cheat-resistance, without ever touching a traditional wallet or buying ETH.
+
+The game is **free-play, real-time, short-clock**. A player clicks "New Game", gets a share link, sends it to a friend, both join, both place fleets, both prove board legality in their browser, they play a round, someone wins, rematch button. Matches take 5–10 minutes start to finish.
+
+The cryptographic novelty (provable cheat-resistance) is the draw — no stakes, no leaderboard, no ELO.
+
+**The existing demo (`scripts/demo-fast.sh` + MockVerifier) stays fully working as the local-development path.** Nothing in this spec breaks the demo. The real-game work ships as an *additional* deployment target, not a replacement.
+
+## Non-Goals
+- ETH stakes, escrow, bets, or prize pools
+- Global leaderboards, ELO, ranking, seasons, tournaments
+- Async play with email/push notifications
+- Long-form persistent games (>30 minutes)
+- Custom rule variants or alternate fleet sizes
+- Mobile-first responsive UI (desktop targets only; mobile can be a follow-up)
+- Mainnet deployment in v1 (L2 testnet is the MVP target; mainnet is a post-MVP decision)
+- Anti-collusion or chat moderation
+- Spectator mode
+- Replacing the existing local demo — the demo stays
+
+## Acceptance Criteria
+
+### Onboarding
+- [ ] Player opens `https://<deploy-url>`, clicks "Sign in", signs in with email or Google via Privy (or Dynamic), lands inside the app with an embedded wallet already provisioned
+- [ ] No MetaMask install required, no seed phrase shown, no ETH required in wallet
+- [ ] Sign-in state persists across page reloads (localStorage or httpOnly cookie from the auth provider)
+
+### Game creation & matchmaking
+- [ ] "New Game" button on landing page calls `createGame(opponent=0x0)` on L2 (Base Sepolia MVP, Base mainnet post-MVP), gets a `gameId`, routes player to `/g/{gameId}` with share-link copy button
+- [ ] "Public Games" tab on landing page lists open gameIds pulled from `GameCreated` events with `opponent == 0x0` (no opponent yet), filtered to games created in the last N minutes
+- [ ] Clicking a public-games entry or opening a share-link URL joins that game as player 2 (the contract updates `opponent` via a `joinGame(gameId)` call), both players land in the placement screen
+
+### Sponsored gas
+- [ ] All player-side transactions (`createGame`, `joinGame`, `commitBoard`, `fireShot`, `respondShot`, `claimTimeoutWin`) are sponsored — the player signs the user-op, a paymaster pays gas
+- [ ] Works on Base Sepolia via Alchemy/Biconomy/Privy's built-in paymaster (choose during planning based on cost + DX)
+- [ ] Player's embedded wallet balance shows 0 ETH and the game still works end-to-end
+
+### Real zk proving (depends on Lane AA unblocking browser bb.js)
+- [ ] Placing a fleet + clicking Ready generates a real UltraHonk `board_validity` proof in the browser via `@aztec/bb.js` with COOP/COEP threading
+- [ ] Proving time is measured and shown in the UI ("Proving board legality... 7.3s")
+- [ ] The generated proof is submitted via `commitBoard` and the on-chain `HonkVerifier` accepts it (no `SumcheckFailed` revert)
+- [ ] Firing a shot triggers the opponent's browser to generate a real `shot_response` proof within the 60-second clock
+- [ ] If bb.js can't be made compatible with the Solidity verifier in time, the fallback is a local Node proving sidecar the player runs via `npx battleship-zk-prove` — this is *not* ideal but unblocks the rest of the spec
+
+### Real-time game pace
+- [ ] Each move has a 60-second clock (configurable per game at creation time: 30s / 60s / 120s)
+- [ ] Clock is enforced on-chain via block timestamps: `claimTimeoutWin(gameId)` lets the non-stalling player claim a win if the other player hasn't moved within the clock window
+- [ ] Both players see a visible countdown
+- [ ] Grace period of 10 seconds on top of the clock to account for proving latency
+
+### Game lifecycle
+- [ ] Phase transitions: `Created → Waiting → Committed → Playing → Finished`
+- [ ] End-of-game shows "You Win / You Lose" screen with stats (shots, hit rate, proving time), a "Rematch" button (creates a new gameId between the same two players), and a "Back to Lobby" button
+- [ ] Closing the browser mid-game triggers the opponent's timeout win after the grace period; on reconnect within the grace period the game resumes
+
+### Deployment
+- [ ] Frontend deployed to Vercel / Cloudflare Pages / Netlify as a static site (no backend server)
+- [ ] BattleshipGame + HonkVerifier contracts deployed on Base Sepolia (MVP) with a documented deploy address in the README
+- [ ] Public demo URL is shareable and loads the app for anyone
+- [ ] COOP/COEP headers are set in production (via `vercel.json` or Cloudflare Pages `_headers` file) so multi-threaded bb.js works
+
+### Cheat-resistance (the whole point)
+- [ ] On-chain `HonkVerifier.verify` is the real Noir-generated contract, NOT MockVerifier
+- [ ] Any attempt to submit an invalid fleet (not exactly 1×5, 1×4, 2×3, 1×2, no overlaps) is rejected at `commitBoard` — no proof can be generated for an invalid board
+- [ ] Any attempt to lie about a shot response is rejected at `respondShot` — the proof binds to the committed fleet
+- [ ] "Commit empty board and always say miss" attack is cryptographically impossible (verified by attempting it as a test)
+
+## Assumptions Exposed & Resolved
+| Assumption | Challenge | Resolution |
+|---|---|---|
+| "Real game means mainnet + stakes" | Contrarian: zero-stake play is enough when zk is the draw | Free play only; L2 testnet first, mainnet later |
+| "Users need MetaMask" | Is the target audience crypto natives? | No — email/Google login via Privy, sponsored gas |
+| "We need a backend for matchmaking" | On-chain events can be the matchmaking substrate | No backend; share links + on-chain event scan |
+| "Async chess-style play is the real experience" | Does Battleship actually benefit from async? | No — real-time with a clock matches how humans play Battleship IRL |
+| "We need real-time proving (<1s)" | Does 5-15s kill the UX for a short game? | No — 5-15s per proof is acceptable when turns are seconds apart anyway |
+
+## Technical Context
+
+### What already exists (stays working)
+- `contracts/src/BattleshipGame.sol` — state machine, createGame / commitBoard / fireShot / respondShot / claimTimeoutWin / claimWin
+- `contracts/src/verifiers/{Board,Shot}*Verifier.sol` — real 2460-line Noir-generated UltraHonk verifiers
+- `circuits/board_validity` + `circuits/shot_response` — Noir circuits with pedersen commitments
+- `frontend/src/lib/prover.ts` — real @aztec/bb.js integration (currently blocked by Lane AA on version compatibility)
+- `frontend/src/lib/provingSimulator.ts` — stub fallback path
+- `frontend/src/components/viz/*` — architecture flow + proving panel + chain panel + circuit stats
+- `scripts/demo-fast.sh` and `scripts/demo-real.sh` — switchers between stub+MockVerifier and real+HonkVerifier
+- `.github/workflows/ci.yml` — CI for contracts + frontend + presentation
+
+### What needs to be added
+
+**Contracts:**
+- `joinGame(uint256 gameId)` — lets player 2 join a game created with `opponent == address(0)`
+- Modify `createGame(address opponent)` to accept `address(0)` as "open game, anyone can join"
+- Emit enriched `GameCreated(gameId, creator, opponent, clockSeconds)` so the lobby can index open games
+- Per-move clock on-chain: store `lastActionTimestamp`, modify `claimTimeoutWin` to use it with a per-game clock setting
+- Deploy to Base Sepolia via a new `contracts/script/DeployBaseSepolia.s.sol`
+- Adjust foundry.toml for L2 target (no changes to solc version, just add RPC + etherscan settings)
+
+**Frontend:**
+- New `/` landing page: sign-in button, "New Game" button, "Public Games" tab, "How it works" section
+- New `/g/[gameId]` route that replaces the current single-page app as the game screen
+- `@privy-io/react-auth` integration (or Dynamic equivalent)
+- Wagmi/viem client pointed at Base Sepolia instead of local Anvil (keep local Anvil as a dev-mode fallback behind an env flag)
+- Replace burner wallet layer with Privy-provided embedded wallet
+- Add sponsored-gas send path (Alchemy Account Abstraction SDK or Privy's bundled paymaster)
+- Share-link generation + clipboard copy
+- Public games lobby component that reads `GameCreated` events via `publicClient.getLogs`
+- Per-move countdown clock with framer-motion
+- End-of-game stats screen with rematch flow
+- Sign-out / switch account button
+
+**Proving (DEPENDS ON LANE AA):**
+- Fix the current bb.js ↔ HonkVerifier `SumcheckFailed` mismatch (Lane AA is working on this right now)
+- If Lane AA succeeds with in-browser proving → ship it, target 5-15s per proof
+- If Lane AA has to fall back to a Node sidecar → publish it as `@battleship-zk/prover` on npm with a `npx battleship-zk-prove` entrypoint, document it as an optional "fast mode" for users who want <3s proving
+
+**Infra:**
+- Vercel deployment of the Vite frontend (or Cloudflare Pages)
+- `vercel.json` with COOP/COEP headers
+- Environment variable for contract address + chain ID + Privy app ID + paymaster key (all public or sponsor-side secrets)
+- DNS / custom domain (optional, post-MVP)
+
+### What's explicitly NOT changing
+- Circuit source code (`circuits/**/src/main.nr`)
+- Solidity verifier format
+- Core `BattleshipGame.sol` commit/shot/respond state machine (only additions, not changes)
+- The local demo path (`scripts/demo-fast.sh`)
+- Presentation / docs
+
+## Ontology (Key Entities)
+
+| Entity | Type | Fields | Relationships |
+|---|---|---|---|
+| Player | core | wallet_address, embedded_wallet_id, display_name | has many Games |
+| Game | core | gameId, player1, player2, state, turn, clockSeconds, createdAt, lastActionAt | has one Board per player, has many Shots |
+| Board | core | fleet (5 ships), salt, commitment, ownCells[100] | belongs to Game and Player |
+| Ship | supporting | shipType, x, y, orientation, length | belongs to Board |
+| Shot | core | x, y, shooter, hit, proof | belongs to Game |
+| Commitment | core | pedersenHash(board ∥ salt) | derived from Board |
+| Proof | core | bytes, publicInputs[], verifierTarget | accompanies Commitment or Shot |
+| PublicGame | derived | gameId, creator, createdAt | filtered list of open Games |
+| Rematch | supporting | previousGameId, newGameId | links two Games between same Players |
+
+## Ontology Convergence
+
+| Round | Entities | New | Stability |
+|---|---|---|---|
+| 1 | Player, Game, Board | 3 | N/A (first) |
+| 2 | Player, Game, Board, EmbeddedWallet | +EmbeddedWallet | 75% |
+| 3 | Player, Game, Board, PublicGame, ShareLink | +2 | 60% |
+| 4 | Player, Game, Board, Proof, VerifierTarget | +2 | 67% |
+| 5 | Player, Game, Board, Proof, Clock, Forfeit | +2 | 71% |
+| 6 | Same as round 5 (free-play removed "Stake" which was never added) | 0 | 100% ✅ |
+
+Converged at round 6.
+
+## Interview Transcript
+
+### Round 1 — Game shape
+**Q:** When you say 'actual functional game people can play,' which version are you picturing?
+**A:** Two strangers, any two browsers
+
+### Round 2 — Onboarding
+**Q:** How should players sign in and pay for gas?
+**A:** Email/Google login, sponsored gas (Privy + L2 paymaster)
+
+### Round 3 — Matchmaking
+**Q:** How do two strangers end up in the same game?
+**A:** Share link + rematch list + public games tab (no central server)
+
+### Round 4 — Proving
+**Q:** Where does the real zk proof get generated for a public player?
+**A:** In browser, accept ~5-15s per proof (requires fixing bb.js ↔ verifier mismatch)
+
+### Round 5 — Game pace
+**Q:** When do the two players need to be online together?
+**A:** Real-time only, short clock (~30-60s per move, forfeit on timeout)
+
+### Round 6 — Stakes (Contrarian)
+**Q:** Do the games need stakes or leaderboards to feel 'real'?
+**A:** Free play, no stakes — the zk cryptography is the draw
+
+## Risks & Open Questions
+
+1. **Lane AA might not fix bb.js** — if the `SumcheckFailed` mismatch can't be resolved, the browser-proving acceptance criterion falls back to the Node sidecar. The sidecar approach still meets the spec but requires users to run `npx battleship-zk-prove` locally, which is a worse story. Decide at planning time whether to block on Lane AA or ship the sidecar in parallel.
+
+2. **Paymaster economics** — sponsoring gas for every commitBoard (which runs the HonkVerifier ~265k gas) costs real money. On Base Sepolia it's free. On Base mainnet, if 1000 players play 5 games each, that's ~$20–50 in sponsored gas at current rates. Acceptable for a demo, a budget decision for anything bigger.
+
+3. **Public-games tab needs event scanning** — with no backend, the lobby reads `GameCreated` events via RPC. At 1000 games/day this is fine. At 100k games/day it needs an indexer (The Graph, Ponder, Envio). Out of scope for MVP.
+
+4. **Clock enforcement is block-timestamp-dependent** — L2 block times are ~2 seconds, so the clock has ±2s jitter. Acceptable for 60s moves, not for bullet-chess pacing. Noted.
+
+5. **Privy lock-in** — if we pick Privy and they change pricing, migration to Dynamic or Magic.link is maybe 1-2 days of work. Mitigated by abstracting the embedded-wallet SDK behind a thin interface.
+
+## Handoff
+
+Recommended execution path: **this spec → `/ralplan --consensus --direct` → `/autopilot`** (the standard 3-stage pipeline). Ralplan will have Planner/Architect/Critic review the L2 deployment architecture, sponsored-gas integration choice, and the Privy vs Dynamic tradeoff.
