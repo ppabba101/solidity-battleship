@@ -49,6 +49,7 @@ export function PlacementBoard({
       >,
   );
   const [active, setActive] = useState<ActiveShip | null>(null);
+  const [lastHoverIdx, setLastHoverIdx] = useState<number | null>(null);
   const [hoverCells, setHoverCells] = useState<{
     indices: number[];
     valid: boolean;
@@ -78,6 +79,7 @@ export function PlacementBoard({
   const cancelActive = useCallback(() => {
     setActive(null);
     setHoverCells(null);
+    setLastHoverIdx(null);
   }, []);
 
   // Global keyboard listener: R rotates active ship, Escape cancels.
@@ -158,6 +160,7 @@ export function PlacementBoard({
   const previewAt = useCallback(
     (i: number) => {
       if (!active) return;
+      setLastHoverIdx(i);
       const x = i % BOARD_SIZE;
       const y = Math.floor(i / BOARD_SIZE);
       const candidate: Ship = {
@@ -178,6 +181,19 @@ export function PlacementBoard({
     },
     [active, fleet],
   );
+
+  // Re-run the hover preview whenever the active ship's orientation changes
+  // while the cursor is still parked on the same cell. Without this, pressing
+  // R during hover only updates the state but the green/red overlay still
+  // reflects the old orientation until you move the mouse.
+  useEffect(() => {
+    if (active && lastHoverIdx !== null) {
+      previewAt(lastHoverIdx);
+    }
+    // previewAt is stable per (active, fleet); we intentionally watch
+    // orientation + fleet so rotation and new placements retrigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.orientation, fleet]);
 
   const commitAt = useCallback(
     (i: number) => {
