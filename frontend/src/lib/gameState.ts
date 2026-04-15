@@ -62,6 +62,26 @@ export function placeFleet(fleet: Fleet): CellState[] {
   return cells;
 }
 
+export function isShipSunk(ship: Ship, hits: Set<number>): boolean {
+  for (const { x, y } of shipCells(ship)) {
+    if (!hits.has(idx(x, y))) return false;
+  }
+  return true;
+}
+
+export function detectSunkShips(
+  opponentFleet: Fleet,
+  hitCellIndices: number[],
+): Ship[] {
+  const hitSet = new Set<number>(hitCellIndices);
+  return opponentFleet.filter((s) => isShipSunk(s, hitSet));
+}
+
+export function shipDisplayName(id: string): string {
+  const spec = STANDARD_FLEET.find((s) => s.id === id);
+  return spec ? spec.name : id;
+}
+
 export function applyHits(
   own: CellState[],
   hits: { x: number; y: number; hit: boolean }[],

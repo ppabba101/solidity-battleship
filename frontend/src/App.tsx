@@ -6,13 +6,20 @@ import { PlacementBoard } from "./components/PlacementBoard";
 import { Grid } from "./components/Grid";
 import { WinScreen } from "./components/WinScreen";
 import { VizLayer, VizSidebar } from "./components/viz/VizLayer";
+import { FleetStatus } from "./components/FleetStatus";
+import { SunkOverlay } from "./components/SunkOverlay";
 import {
   BOARD_CELLS,
   BOARD_SIZE,
   applyHits,
+  detectSunkShips,
+  idx as cellIdx,
   placeFleet,
+  shipCells,
+  shipDisplayName,
   type CellState,
   type Fleet,
+  type Ship,
 } from "./lib/gameState";
 import { randomSalt } from "./lib/prover";
 import {
@@ -67,6 +74,11 @@ export default function App() {
   const [winner, setWinner] = useState<0 | 1 | null>(null);
   const [gameId, setGameId] = useState<bigint | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sunkAnnouncement, setSunkAnnouncement] = useState<string | null>(null);
+  // Track which opponent ship ids each shooter has fully sunk so the FleetStatus
+  // tracker stays in sync across re-renders.
+  const [p1SunkIds, setP1SunkIds] = useState<Set<string>>(new Set());
+  const [p2SunkIds, setP2SunkIds] = useState<Set<string>>(new Set());
 
   const burners = useMemo(() => createBurners(), []);
 
@@ -83,7 +95,11 @@ export default function App() {
     p2Ref.current = p2;
   }, [p2]);
 
-  const appendLog = (text: string, proving_ms?: number) => {
+  const appendLog = (
+    text: string,
+    proving_ms?: number,
+    meta?: Partial<LogEntry>,
+  ) => {
     setLog((l) => [
       ...l,
       {
@@ -91,6 +107,7 @@ export default function App() {
         timestamp: Date.now(),
         text,
         proving_ms,
+        ...meta,
       },
     ]);
   };
@@ -153,22 +170,19 @@ export default function App() {
 
   const onReady = async () => {
     setProving("Proving your board…");
-    const start = performance.now();
+    const proveStart = performance.now();
     try {
       const { commitment, proof, publicInputs, ms } = await simulateBoardValidity(
         current.fleet,
         current.salt,
       );
-      const elapsed = Math.round(performance.now() - start);
-      setTotalProvingMs((m) => m + ms);
-      appendLog(
-        `\u2713 Board legality proven for Player ${player + 1} in ${(elapsed / 1000).toFixed(2)}s`,
-        ms,
-      );
+      const proveMs = ms;
+      setTotalProvingMs((m) => m + proveMs);
 
       // On-chain: first player creates the game, both players commitBoard.
       let currentGameId = gameId;
       try {
+        const chainStart = performance.now();
         if (currentGameId === null) {
           const opponentAddr =
             player === 0 ? burners.player2.address : burners.player1.address;
@@ -187,8 +201,20 @@ export default function App() {
           proof,
           publicInputs,
         );
+        const chainMs = Math.round(performance.now() - chainStart);
+        const totalMs = Math.round(performance.now() - proveStart);
         appendLog(
-          `chain: commitBoard tx=${txHash.slice(0, 10)}… commitment=${commitment.slice(0, 10)}…`,
+          `\u2713 Board proven for Player ${player + 1} (prove ${(proveMs / 1000).toFixed(2)}s, verify+tx ${(chainMs / 1000).toFixed(2)}s, total ${(totalMs / 1000).toFixed(2)}s)`,
+          proveMs,
+          {
+            txHash,
+            commitment,
+            proveMs,
+            chainMs,
+            totalMs,
+            proofBytes: Math.max(0, (proof.length - 2) / 2),
+            proofPreview: proof.slice(0, 102),
+          },
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -250,8 +276,14 @@ export default function App() {
     if (gameId !== null) {
       try {
         setProving("Submitting shot on-chain…");
+        const fireStart = performance.now();
         const tx = await contractFireShot(player, gameId, x, y);
-        appendLog(`chain: fireShot tx=${tx.slice(0, 10)}… (${x},${y})`);
+        const fireMs = Math.round(performance.now() - fireStart);
+        appendLog(
+          `chain: fireShot (${x},${y}) verify+tx ${(fireMs / 1000).toFixed(2)}s`,
+          undefined,
+          { txHash: tx, chainMs: fireMs, totalMs: fireMs },
+        );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("fireShot failed", e);
@@ -264,19 +296,15 @@ export default function App() {
 
     // 2) Compute + prove response as the opponent (hot-seat local demo).
     setProving(`Proving shot (${x},${y})…`);
-    const start = performance.now();
+    const proveWallStart = performance.now();
     const { hit, proof, publicInputs: shotPublicInputs, ms } = await simulateShotResponse(
       opponent.fleet,
       opponent.salt,
       x,
       y,
     );
-    const elapsed = Math.round(performance.now() - start);
-    setTotalProvingMs((m) => m + ms);
-    appendLog(
-      `\u2713 Shot at (${x},${y}) proven ${hit ? "HIT" : "MISS"} in ${(elapsed / 1000).toFixed(2)}s`,
-      ms,
-    );
+    const proveMs = ms;
+    setTotalProvingMs((m) => m + proveMs);
     playSfx(hit ? "hit" : "miss", muted);
 
     // 3) respondShot tx from opponent burner.
@@ -284,9 +312,21 @@ export default function App() {
       try {
         setProving("Submitting response on-chain…");
         const responder: 0 | 1 = player === 0 ? 1 : 0;
+        const respondChainStart = performance.now();
         const tx = await contractRespondShot(responder, gameId, hit, proof, shotPublicInputs);
+        const chainMs = Math.round(performance.now() - respondChainStart);
+        const totalMs = Math.round(performance.now() - proveWallStart);
         appendLog(
-          `chain: respondShot tx=${tx.slice(0, 10)}… ${hit ? "HIT" : "MISS"}`,
+          `\u2713 Shot (${x},${y}) ${hit ? "HIT" : "MISS"} (prove ${(proveMs / 1000).toFixed(2)}s, verify+tx ${(chainMs / 1000).toFixed(2)}s, total ${(totalMs / 1000).toFixed(2)}s)`,
+          proveMs,
+          {
+            txHash: tx,
+            proveMs,
+            chainMs,
+            totalMs,
+            proofBytes: Math.max(0, (proof.length - 2) / 2),
+            proofPreview: proof.slice(0, 102),
+          },
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -302,6 +342,45 @@ export default function App() {
     nextEnemy[i] = hit ? "CONFIRMED_HIT" : "CONFIRMED_MISS";
     const nextShots = current.shots + 1;
     const nextHits = current.hits + (hit ? 1 : 0);
+    let nextOpponentCells = applyHits(opponent.ownCells, [{ x, y, hit }]);
+
+    // Sink detection: derive the set of confirmed hits the shooter has on the
+    // opponent's grid and check if any opponent ship is fully covered.
+    const shooterPrevSunk = player === 0 ? p1SunkIds : p2SunkIds;
+    const setShooterSunk = player === 0 ? setP1SunkIds : setP2SunkIds;
+    const hitIndices: number[] = [];
+    for (let k = 0; k < nextEnemy.length; k++) {
+      if (nextEnemy[k] === "CONFIRMED_HIT" || nextEnemy[k] === "SUNK") {
+        hitIndices.push(k);
+      }
+    }
+    const sunkShips: Ship[] = detectSunkShips(opponent.fleet, hitIndices);
+    const newlySunk = sunkShips.filter((s) => !shooterPrevSunk.has(s.id));
+
+    if (newlySunk.length > 0) {
+      // Transition every cell of newly-sunk ships to SUNK on both grids.
+      for (const ship of newlySunk) {
+        for (const { x: sx, y: sy } of shipCells(ship)) {
+          const ci = cellIdx(sx, sy);
+          nextEnemy[ci] = "SUNK";
+          nextOpponentCells[ci] = "SUNK";
+        }
+      }
+      const updatedSunk = new Set(shooterPrevSunk);
+      for (const s of newlySunk) updatedSunk.add(s.id);
+      setShooterSunk(updatedSunk);
+
+      for (const ship of newlySunk) {
+        const name = shipDisplayName(ship.id);
+        appendLog(`\u2693 ${name} SUNK!`);
+        playSfx("sunk", muted);
+        setSunkAnnouncement(name);
+        window.setTimeout(() => {
+          setSunkAnnouncement((cur) => (cur === name ? null : cur));
+        }, 2000);
+      }
+    }
+
     setCurrent({
       ...current,
       enemyCells: nextEnemy,
@@ -310,7 +389,7 @@ export default function App() {
     });
     setOpponent({
       ...opponent,
-      ownCells: applyHits(opponent.ownCells, [{ x, y, hit }]),
+      ownCells: nextOpponentCells,
     });
     setProving(null);
 
@@ -336,6 +415,9 @@ export default function App() {
     setPlayer(0);
     setGameId(null);
     setError(null);
+    setP1SunkIds(new Set());
+    setP2SunkIds(new Set());
+    setSunkAnnouncement(null);
     setPhase("placement");
   };
 
@@ -397,13 +479,17 @@ export default function App() {
                   in zk.
                 </p>
               </div>
-              <div className="flex gap-10">
+              <div className="flex gap-10 items-start">
                 <Grid cells={current.ownCells} label="Your Fleet" />
                 <Grid
                   cells={current.enemyCells}
                   label="Enemy Waters"
                   onCellClick={fireShot}
                   disabled={!!proving}
+                />
+                <FleetStatus
+                  opponentFleet={opponent.fleet}
+                  sunkShipIds={player === 0 ? p1SunkIds : p2SunkIds}
                 />
               </div>
             </div>
@@ -440,6 +526,8 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SunkOverlay shipName={sunkAnnouncement} />
 
       <WinScreen
         open={phase === "finished"}

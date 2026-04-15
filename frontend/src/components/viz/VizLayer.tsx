@@ -2,7 +2,6 @@ import { ArchitectureFlow } from "./ArchitectureFlow";
 import { ProvingPanel } from "./ProvingPanel";
 import { BoardToHashViz } from "./BoardToHashViz";
 import { ChainPanel } from "./ChainPanel";
-import { CircuitStatsCard } from "./CircuitStatsCard";
 
 // Top-of-screen pipeline diagram + proving modal.
 // Side-rail panels are exported separately and composed into App.tsx's sidebar.
@@ -25,7 +24,6 @@ export function VizSidebar() {
   return (
     <div className="space-y-3 min-w-0">
       <BoardToHashViz />
-      <CircuitStatsCard />
       <ChainPanel />
     </div>
   );

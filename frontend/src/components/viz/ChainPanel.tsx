@@ -52,7 +52,7 @@ export function ChainPanel() {
         const hash = (e.payload?.hash as string) ?? "0x";
         const method = (e.payload?.method as string) ?? "call";
         setTxs((list) =>
-          [{ hash, method, status: "pending" as const }, ...list].slice(0, 5),
+          [{ hash, method, status: "pending" as const }, ...list].slice(0, 50),
         );
       } else if (e.kind === "tx_mined") {
         const hash = (e.payload?.hash as string) ?? "0x";
@@ -72,7 +72,7 @@ export function ChainPanel() {
               txHash: e.payload?.txHash as string | undefined,
             },
             ...list,
-          ].slice(0, 6),
+          ].slice(0, 50),
         );
       }
     });
@@ -131,12 +131,12 @@ export function ChainPanel() {
 
         <div>
           <div className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">
-            Last 5 transactions
+            Recent transactions
           </div>
           {txs.length === 0 ? (
             <div className="text-slate-500 italic">No transactions yet.</div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
               {txs.map((t) => (
                 <div
                   key={t.hash}
@@ -181,7 +181,7 @@ export function ChainPanel() {
           {events.length === 0 ? (
             <div className="text-slate-500 italic">No events emitted yet.</div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
               {events.map((ev) => (
                 <div
                   key={ev.id}

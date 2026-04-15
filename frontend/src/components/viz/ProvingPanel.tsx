@@ -106,22 +106,36 @@ export function ProvingPanel() {
     };
   }, [run?.runId, run?.done]);
 
-  // Stream the proof byte preview once the bytes arrive.
+  // Stream the proof byte preview once the bytes arrive. UltraHonk proofs
+  // start with a mostly-zero header (public-inputs-size + padding); reveal
+  // from the first non-zero byte so the user actually sees the high-entropy
+  // middle of the proof instead of a wall of zeros.
   useEffect(() => {
     if (!run?.proofBytes) return;
     setByteCursor(0);
     const id = window.setInterval(() => {
       setByteCursor((c) => {
-        const next = c + 8;
-        if (next >= (run.proofBytes?.length ?? 0)) {
+        const next = c + 16;
+        const total = run.proofBytes?.length ?? 0;
+        if (next >= Math.min(total, 1600)) {
           window.clearInterval(id);
-          return run.proofBytes?.length ?? 0;
+          return Math.min(total, 1600);
         }
         return next;
       });
-    }, 25);
+    }, 15);
     return () => window.clearInterval(id);
   }, [run?.proofBytes]);
+
+  const startOffset = (() => {
+    const bytes = run?.proofBytes;
+    if (!bytes) return 0;
+    // Skip the leading "0x" plus any all-zero hex pairs in the header.
+    const hex = bytes.startsWith("0x") ? bytes.slice(2) : bytes;
+    let i = 0;
+    while (i + 2 <= hex.length && hex[i] === "0" && hex[i + 1] === "0") i += 2;
+    return (bytes.startsWith("0x") ? 2 : 0) + i;
+  })();
 
   const visible = !!run;
   const elapsed = run
@@ -212,13 +226,23 @@ export function ProvingPanel() {
               </div>
 
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">
-                  proof bytes (streaming)
+                <div className="text-[10px] text-slate-500 mb-1 flex justify-between">
+                  <span>proof bytes (streaming)</span>
+                  {run.proofBytes && (
+                    <span className="text-orange/70">
+                      {Math.floor(((run.proofBytes.length - 2) / 2))} bytes · UltraHonk
+                    </span>
+                  )}
                 </div>
                 <div className="h-16 p-2 rounded bg-black/40 border border-navy-light overflow-hidden text-[10px] text-orange-bright break-all leading-tight">
-                  {run.proofBytes
-                    ? run.proofBytes.slice(0, byteCursor) || "…"
-                    : "awaiting prover…"}
+                  {run.proofBytes ? (
+                    <>
+                      <span className="text-slate-600">0x…</span>
+                      {run.proofBytes.slice(startOffset, startOffset + byteCursor) || "…"}
+                    </>
+                  ) : (
+                    "awaiting prover…"
+                  )}
                   <span className="inline-block w-[6px] h-[10px] bg-orange animate-pulse align-middle ml-0.5" />
                 </div>
               </div>
