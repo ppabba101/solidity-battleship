@@ -57,12 +57,36 @@ The cryptographic novelty (provable cheat-resistance) is the draw — no stakes,
 - [ ] Works on Base Sepolia via Alchemy/Biconomy/Privy's built-in paymaster (choose during planning based on cost + DX)
 - [ ] Player's embedded wallet balance shows 0 ETH and the game still works end-to-end
 
-### Real zk proving (depends on Lane AA unblocking browser bb.js)
-- [ ] Placing a fleet + clicking Ready generates a real UltraHonk `board_validity` proof in the browser via `@aztec/bb.js` with COOP/COEP threading
-- [ ] Proving time is measured and shown in the UI ("Proving board legality... 7.3s")
-- [ ] The generated proof is submitted via `commitBoard` and the on-chain `HonkVerifier` accepts it (no `SumcheckFailed` revert)
-- [ ] Firing a shot triggers the opponent's browser to generate a real `shot_response` proof within the 60-second clock
-- [ ] If bb.js can't be made compatible with the Solidity verifier in time, the fallback is a local Node proving sidecar the player runs via `npx battleship-zk-prove` — this is *not* ideal but unblocks the rest of the spec
+### Real zk proving (UPDATED after Lane AA — sidecar is the path forward)
+
+**Lane AA finding:** The browser build of `@aztec/bb.js@5.0.0-nightly.20260324` emits UltraHonk proofs that revert the deployed Solidity `HonkVerifier` with `SumcheckFailed`, while the **Node build of the exact same bb.js version** produces proofs that verify both natively and on-chain. The skew is browser-wasm-specific (CRS/worker loading under cross-origin isolation), not a protocol or VK bug.
+
+**Conclusion:** Shipping a public multiplayer game that relies on in-browser bb.js is blocked until Aztec fixes the browser wasm loader. The sidecar approach is the working path.
+
+- [ ] Real proof generation goes through a **localhost Node proving sidecar** (`scripts/prove-sidecar.mjs`) on port 8899
+- [ ] Placing a fleet + clicking Ready POSTs the fleet layout to `http://127.0.0.1:8899/prove-board`, receives a real UltraHonk proof, submits via `commitBoard` — measured **6.1s cold, 5.6s warm** including chain round-trip
+- [ ] Firing a shot posts to `/prove-shot`, measured **5.3s** round-trip
+- [ ] The generated proof is accepted by the on-chain `HonkVerifier` (verified — tx status=1, gasUsed=2,693,647)
+- [ ] Full E2E bench run in headless chromium: zero console errors, P1 commit + P2 commit + shot-response all landed
+
+### Sidecar implication for the PUBLIC multiplayer story (NEW)
+
+The local-sidecar path works for the current demo but creates a deployment problem for "two strangers on any two browsers":
+
+**Option A — bundled desktop wrapper**: ship the game as an Electron/Tauri app with the sidecar embedded. One-click install, zero config, proving stays client-side. **Loses "just open a URL" UX.** Biggest scope hit.
+
+**Option B — `npx battleship-zk-prove` CLI**: players install Node.js and run `npx battleship-zk-prove` in a terminal before opening the game. The in-app prover-sidecar-URL field lets them paste in their own sidecar address. **Terrible UX for casual players** but keeps the trust model and ships fast.
+
+**Option C — trusted remote prover service**: host the sidecar on a public URL, have players POST witnesses to it. **Breaks privacy**: the remote server sees each player's fleet layout. Only acceptable if run in a TEE (SGX/TDX) or if the privacy guarantee isn't critical.
+
+**Option D — wait for Aztec to fix the browser bb.js**: file a bug report at AztecProtocol/aztec-packages, wait weeks/months. Doesn't unblock the spec timeline.
+
+**Option E — MockVerifier-backed "preview" deployment**: the public deployment runs with MockVerifier so proofs don't actually mean anything, but the game state machine + matchmaking + UX all work. Tag the deployment as "preview, not cryptographically secure yet", plan to flip to real proving once the browser bb.js loader is fixed upstream. **Ships fast, honest about the limitation.**
+
+**Recommended MVP path: Option E for v1**, with a highly visible "This is a preview — proofs are simulated" banner, plus Option A/B as a "play in secure mode" bonus for power users. Flip to real proving globally once upstream is fixed. This preserves "two strangers, any two browsers" as the primary UX and doesn't make perfect the enemy of shippable.
+
+- [ ] Public deployment decision documented as Option E + Option B hybrid
+- [ ] Real-proving mode is available via "Advanced → Run your own prover" settings for users who want cryptographic guarantees now
 
 ### Real-time game pace
 - [ ] Each move has a 60-second clock (configurable per game at creation time: 30s / 60s / 120s)
@@ -204,7 +228,7 @@ Converged at round 6.
 
 ## Risks & Open Questions
 
-1. **Lane AA might not fix bb.js** — if the `SumcheckFailed` mismatch can't be resolved, the browser-proving acceptance criterion falls back to the Node sidecar. The sidecar approach still meets the spec but requires users to run `npx battleship-zk-prove` locally, which is a worse story. Decide at planning time whether to block on Lane AA or ship the sidecar in parallel.
+1. **Browser bb.js is broken, sidecar works (RESOLVED by Lane AA)** — browser bb.js 5.0.0-nightly.20260324 emits proofs that revert the HonkVerifier; Node bb.js does not. Sidecar landed with real E2E verified (6s cold / 5.5s warm / 5.3s shot). Public-deployment implications captured above — MVP ships with Option E (MockVerifier-backed preview + optional local sidecar for crypto mode).
 
 2. **Paymaster economics** — sponsoring gas for every commitBoard (which runs the HonkVerifier ~265k gas) costs real money. On Base Sepolia it's free. On Base mainnet, if 1000 players play 5 games each, that's ~$20–50 in sponsored gas at current rates. Acceptable for a demo, a budget decision for anything bigger.
 
