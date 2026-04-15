@@ -47,6 +47,11 @@ contract BattleshipGame {
     // bitmap of confirmed hits on player[playerIdx]'s board. Bit (y*10+x) is
     // set when the contract has verified a HIT response at (x,y).
     mapping(uint256 => uint256[2]) private hitBitmap;
+    // firedBitmap[gameId][playerIdx] tracks every cell that has ever been
+    // fired at on player[playerIdx]'s board (hit or miss). Used to reject
+    // duplicate fireShots which would otherwise trip the circuit's
+    // "no double-fire" assertion and hang the frontend.
+    mapping(uint256 => uint256[2]) private firedBitmap;
 
     event GameCreated(uint256 indexed gameId, address indexed creator, address indexed opponent);
     event BoardCommitted(uint256 indexed gameId, address indexed player, bytes32 commitment);
@@ -118,6 +123,11 @@ contract BattleshipGame {
         require(x < BOARD_SIZE && y < BOARD_SIZE, "out of range");
         uint8 idx = _playerIndex(g, msg.sender);
         require(idx == g.turn, "not your turn");
+
+        uint8 responder = 1 - g.turn;
+        uint256 cellBit = uint256(1) << (uint256(y) * 10 + uint256(x));
+        require((firedBitmap[gameId][responder] & cellBit) == 0, "already fired");
+        firedBitmap[gameId][responder] |= cellBit;
 
         g.shotPending = true;
         g.pendingX = x;
@@ -272,6 +282,10 @@ contract BattleshipGame {
 
     function hitBitmapOf(uint256 gameId, uint8 playerIdx) external view returns (uint256) {
         return hitBitmap[gameId][playerIdx];
+    }
+
+    function firedBitmapOf(uint256 gameId, uint8 playerIdx) external view returns (uint256) {
+        return firedBitmap[gameId][playerIdx];
     }
 
     // ---------------------------------------------------------------------

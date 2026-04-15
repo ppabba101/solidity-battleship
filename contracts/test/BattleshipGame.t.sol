@@ -241,6 +241,33 @@ contract BattleshipGameTest is Test {
         game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 5, 5, true, 1, 0));
     }
 
+    function testFireShotRejectsDoubleFire() public {
+        uint256 id = _createGame();
+        _commitBoth(id);
+
+        // Alice fires at (5,5), misses → turn flips to Bob.
+        vm.prank(alice);
+        game.fireShot(id, 5, 5);
+        vm.prank(bob);
+        game.respondShot(id, false, PROOF, _piShot(bytes32(uint256(0xB2)), 5, 5, false, 0, 0));
+
+        // Bob fires at (2,2), misses → turn flips back to Alice.
+        vm.prank(bob);
+        game.fireShot(id, 2, 2);
+        vm.prank(alice);
+        game.respondShot(id, false, PROOF, _piShot(bytes32(uint256(0xA1)), 2, 2, false, 0, 0));
+
+        // Alice tries to fire at (5,5) again → should revert "already fired".
+        vm.prank(alice);
+        vm.expectRevert(bytes("already fired"));
+        game.fireShot(id, 5, 5);
+
+        // Alice fires at a fresh cell → should work.
+        vm.prank(alice);
+        game.fireShot(id, 9, 9);
+        assertTrue(game.firedBitmapOf(id, 1) != 0, "fired bitmap should track Bob's board");
+    }
+
     function testTimeoutWin() public {
         uint256 id = _createGame();
         _commitBoth(id);
