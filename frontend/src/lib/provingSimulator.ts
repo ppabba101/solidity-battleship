@@ -124,6 +124,7 @@ export function simulateShotResponse(
   salt: `0x${string}`,
   x: number,
   y: number,
+  hitBitmapBefore: bigint,
 ): Promise<ShotProof> {
   return runWithViz(
     {
@@ -131,7 +132,7 @@ export function simulateShotResponse(
       method: "submitShot",
       publicInputs: { x, y },
     },
-    () => proveShotResponse(fleet, salt, x, y),
+    () => proveShotResponse(fleet, salt, x, y, hitBitmapBefore),
   );
 }
 

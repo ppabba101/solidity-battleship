@@ -103,6 +103,16 @@ export const BATTLESHIP_ABI = [
     stateMutability: "view",
   },
   {
+    type: "function",
+    name: "hitBitmapOf",
+    inputs: [
+      { name: "gameId", type: "uint256" },
+      { name: "playerIdx", type: "uint8" },
+    ],
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
     type: "event",
     name: "GameCreated",
     inputs: [
@@ -142,6 +152,16 @@ export const BATTLESHIP_ABI = [
       { name: "x", type: "uint8", indexed: false },
       { name: "y", type: "uint8", indexed: false },
       { name: "hit", type: "bool", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ShipSunk",
+    inputs: [
+      { name: "gameId", type: "uint256", indexed: true },
+      { name: "responder", type: "address", indexed: true },
+      { name: "shipId", type: "uint8", indexed: false },
     ],
     anonymous: false,
   },
@@ -269,8 +289,27 @@ export type GameEventHandlers = {
     y: number;
     hit: boolean;
   }) => void;
+  onShipSunk?: (args: {
+    gameId: bigint;
+    responder: `0x${string}`;
+    shipId: number;
+  }) => void;
   onGameWon?: (args: { gameId: bigint; winner: `0x${string}` }) => void;
 };
+
+export async function readHitBitmap(
+  gameId: bigint,
+  playerIdx: 0 | 1,
+): Promise<bigint> {
+  const pub = getPublicClient();
+  const v = (await pub.readContract({
+    address: CONTRACT_ADDRESS,
+    abi: BATTLESHIP_ABI,
+    functionName: "hitBitmapOf",
+    args: [gameId, playerIdx],
+  })) as bigint;
+  return v;
+}
 
 export function watchGameEvents(handlers: GameEventHandlers): () => void {
   const pub = getPublicClient();
@@ -320,6 +359,28 @@ export function watchGameEvents(handlers: GameEventHandlers): () => void {
             x: Number(a.x),
             y: Number(a.y),
             hit: !!a.hit,
+          });
+        }
+      },
+    }),
+  );
+
+  unsubs.push(
+    pub.watchContractEvent({
+      address: CONTRACT_ADDRESS,
+      abi: BATTLESHIP_ABI,
+      eventName: "ShipSunk",
+      onLogs: (logs) => {
+        for (const l of logs) {
+          const a = l.args as {
+            gameId?: bigint;
+            responder?: `0x${string}`;
+            shipId?: number;
+          };
+          handlers.onShipSunk?.({
+            gameId: a.gameId!,
+            responder: a.responder!,
+            shipId: Number(a.shipId),
           });
         }
       },

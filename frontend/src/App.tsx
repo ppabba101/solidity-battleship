@@ -12,14 +12,12 @@ import {
   BOARD_CELLS,
   BOARD_SIZE,
   applyHits,
-  detectSunkShips,
   idx as cellIdx,
   placeFleet,
   shipCells,
   shipDisplayName,
   type CellState,
   type Fleet,
-  type Ship,
 } from "./lib/gameState";
 import { randomSalt } from "./lib/prover";
 import {
@@ -47,6 +45,9 @@ interface PlayerState {
   enemyCells: CellState[];
   shots: number;
   hits: number;
+  // Cumulative 100-bit hit bitmap on THIS player's own board (confirmed hits
+  // the opponent has landed). Canonical against the on-chain hitBitmapOf.
+  ownHitBitmap: bigint;
 }
 
 function blankPlayer(): PlayerState {
@@ -57,6 +58,7 @@ function blankPlayer(): PlayerState {
     enemyCells: Array(BOARD_CELLS).fill("UNKNOWN"),
     shots: 0,
     hits: 0,
+    ownHitBitmap: 0n,
   };
 }
 
@@ -143,6 +145,9 @@ export default function App() {
         },
         onShotResponded: ({ gameId: gid, hit }) => {
           appendLog(`chain: ShotResponded game=${gid} ${hit ? "HIT" : "MISS"}`);
+        },
+        onShipSunk: ({ gameId: gid, shipId }) => {
+          appendLog(`chain: ShipSunk game=${gid} shipId=${shipId}`);
         },
         onGameWon: ({ gameId: gid, winner: w }) => {
           appendLog(`chain: GameWon game=${gid} winner=${w.slice(0, 10)}…`);
@@ -295,14 +300,18 @@ export default function App() {
     }
 
     // 2) Compute + prove response as the opponent (hot-seat local demo).
+    //    Pass the opponent's canonical pre-shot hit bitmap into the circuit so
+    //    the proof binds sunk_ship_id to the actual on-chain state.
     setProving(`Proving shot (${x},${y})…`);
     const proveWallStart = performance.now();
-    const { hit, proof, publicInputs: shotPublicInputs, ms } = await simulateShotResponse(
-      opponent.fleet,
-      opponent.salt,
-      x,
-      y,
-    );
+    const { hit, sunkShipId, proof, publicInputs: shotPublicInputs, ms } =
+      await simulateShotResponse(
+        opponent.fleet,
+        opponent.salt,
+        x,
+        y,
+        opponent.ownHitBitmap,
+      );
     const proveMs = ms;
     setTotalProvingMs((m) => m + proveMs);
     playSfx(hit ? "hit" : "miss", muted);
@@ -343,36 +352,37 @@ export default function App() {
     const nextShots = current.shots + 1;
     const nextHits = current.hits + (hit ? 1 : 0);
     let nextOpponentCells = applyHits(opponent.ownCells, [{ x, y, hit }]);
+    const nextOpponentBitmap =
+      hit ? opponent.ownHitBitmap | (1n << BigInt(y * 10 + x)) : opponent.ownHitBitmap;
 
-    // Sink detection: derive the set of confirmed hits the shooter has on the
-    // opponent's grid and check if any opponent ship is fully covered.
+    // Sink detection is now circuit-driven: the prover returns sunkShipId in
+    // {0, 1..=5}, cryptographically bound to the opponent's committed fleet
+    // and the canonical pre-shot bitmap enforced by the contract. We use the
+    // 1-indexed id to look up the ship in the canonical fleet order.
     const shooterPrevSunk = player === 0 ? p1SunkIds : p2SunkIds;
     const setShooterSunk = player === 0 ? setP1SunkIds : setP2SunkIds;
-    const hitIndices: number[] = [];
-    for (let k = 0; k < nextEnemy.length; k++) {
-      if (nextEnemy[k] === "CONFIRMED_HIT" || nextEnemy[k] === "SUNK") {
-        hitIndices.push(k);
-      }
-    }
-    const sunkShips: Ship[] = detectSunkShips(opponent.fleet, hitIndices);
-    const newlySunk = sunkShips.filter((s) => !shooterPrevSunk.has(s.id));
-
-    if (newlySunk.length > 0) {
-      // Transition every cell of newly-sunk ships to SUNK on both grids.
-      for (const ship of newlySunk) {
-        for (const { x: sx, y: sy } of shipCells(ship)) {
+    if (sunkShipId > 0) {
+      const canonical = [
+        "carrier",
+        "battleship",
+        "cruiser",
+        "submarine",
+        "destroyer",
+      ];
+      const sunkId = canonical[sunkShipId - 1];
+      const sunkShip = opponent.fleet.find((s) => s.id === sunkId);
+      if (sunkShip && !shooterPrevSunk.has(sunkShip.id)) {
+        for (const { x: sx, y: sy } of shipCells(sunkShip)) {
           const ci = cellIdx(sx, sy);
           nextEnemy[ci] = "SUNK";
           nextOpponentCells[ci] = "SUNK";
         }
-      }
-      const updatedSunk = new Set(shooterPrevSunk);
-      for (const s of newlySunk) updatedSunk.add(s.id);
-      setShooterSunk(updatedSunk);
+        const updatedSunk = new Set(shooterPrevSunk);
+        updatedSunk.add(sunkShip.id);
+        setShooterSunk(updatedSunk);
 
-      for (const ship of newlySunk) {
-        const name = shipDisplayName(ship.id);
-        appendLog(`\u2693 ${name} SUNK!`);
+        const name = shipDisplayName(sunkShip.id);
+        appendLog(`\u2693 ${name} SUNK! (zk-verified, shipId=${sunkShipId})`);
         playSfx("sunk", muted);
         setSunkAnnouncement(name);
         window.setTimeout(() => {
@@ -390,6 +400,7 @@ export default function App() {
     setOpponent({
       ...opponent,
       ownCells: nextOpponentCells,
+      ownHitBitmap: nextOpponentBitmap,
     });
     setProving(null);
 

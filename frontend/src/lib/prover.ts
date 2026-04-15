@@ -29,6 +29,7 @@ export interface BoardProof {
 
 export interface ShotProof {
   hit: boolean;
+  sunkShipId: number;
   proof: `0x${string}`;
   publicInputs: `0x${string}`[];
   ms: number;
@@ -285,11 +286,44 @@ export async function proveBoardValidity(
   };
 }
 
+// Canonical ship lengths, matching both circuits and STANDARD_FLEET order.
+const CANONICAL_SHIP_LENS = [5, 4, 3, 3, 2] as const;
+
+// Mirror of the Noir circuit's sunk_ship_id derivation, for the stub path.
+function computeSunkShipIdFromFleet(
+  orderedFleet: Ship[],
+  nextBitmap: bigint,
+): number {
+  for (let s = 0; s < orderedFleet.length; s++) {
+    const ship = orderedFleet[s];
+    const len = CANONICAL_SHIP_LENS[s];
+    let covered = 0;
+    for (let k = 0; k < len; k++) {
+      const cx = ship.orientation === "H" ? ship.x + k : ship.x;
+      const cy = ship.orientation === "V" ? ship.y + k : ship.y;
+      const bit = (nextBitmap >> BigInt(cy * 10 + cx)) & 1n;
+      if (bit === 1n) covered++;
+    }
+    if (covered === len) return s + 1;
+  }
+  return 0;
+}
+
+function bitmapToHexFields(bitmap: bigint): `0x${string}`[] {
+  const out: `0x${string}`[] = new Array(100);
+  for (let i = 0; i < 100; i++) {
+    const bit = (bitmap >> BigInt(i)) & 1n;
+    out[i] = ("0x" + (bit === 1n ? "01" : "00").padStart(64, "0")) as `0x${string}`;
+  }
+  return out;
+}
+
 export async function proveShotResponse(
   fleet: Fleet,
   salt: `0x${string}`,
   x: number,
   y: number,
+  hitBitmapBefore: bigint,
 ): Promise<ShotProof> {
   const start = performance.now();
   const board = boardFromFleet(fleet);
@@ -301,10 +335,25 @@ export async function proveShotResponse(
     const xHex = ("0x" + x.toString(16).padStart(64, "0")) as `0x${string}`;
     const yHex = ("0x" + y.toString(16).padStart(64, "0")) as `0x${string}`;
     const hitHex = ("0x" + (hit ? "01".padStart(64, "0") : "00".padStart(64, "0"))) as `0x${string}`;
+    const ordered = canonicalFleet(fleet);
+    const nextBitmap =
+      hitBitmapBefore | (hit ? 1n << BigInt(y * 10 + x) : 0n);
+    const sunkShipId = computeSunkShipIdFromFleet(ordered, nextBitmap);
+    const sunkHex = ("0x" +
+      sunkShipId.toString(16).padStart(64, "0")) as `0x${string}`;
     return {
       hit,
+      sunkShipId,
       proof: stubProofBytes(),
-      publicInputs: [commitment, xHex, yHex, hitHex, ...stubAccumulator()],
+      publicInputs: [
+        commitment,
+        xHex,
+        yHex,
+        hitHex,
+        ...bitmapToHexFields(hitBitmapBefore),
+        sunkHex,
+        ...stubAccumulator(),
+      ],
       ms: Math.round(performance.now() - start),
     };
   }
@@ -315,13 +364,21 @@ export async function proveShotResponse(
   void commitment; // commitment is recomputed inside the sidecar and returned in publicInputs[0]
   const out = await postSidecar<{
     hit: boolean;
+    sunkShipId: number;
     proof: `0x${string}`;
     publicInputs: `0x${string}`[];
     ms: number;
-  }>("/prove-shot", { fleet: ordered, salt, x, y });
+  }>("/prove-shot", {
+    fleet: ordered,
+    salt,
+    x,
+    y,
+    hitBitmapBefore: hitBitmapBefore.toString(),
+  });
 
   return {
     hit: out.hit,
+    sunkShipId: out.sunkShipId ?? 0,
     proof: out.proof,
     publicInputs: out.publicInputs,
     ms: Math.round(performance.now() - start),

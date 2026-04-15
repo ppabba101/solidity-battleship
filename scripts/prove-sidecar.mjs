@@ -141,22 +141,69 @@ async function proveBoard({ fleet, salt }) {
   return { commitment, proof: hexFromBytes(proof), publicInputs, ms: Date.now() - t0 };
 }
 
-async function proveShot({ fleet, salt, x, y }) {
+// Given a canonical fleet (length-5 ordered array) and a post-shot bitmap
+// (BigInt with one bit per cell, (y*10+x)), return the canonical 1..=5 ship
+// id of a fully-covered ship or 0 if none. Mirrors the Noir circuit's logic.
+function computeSunkShipId(orderedFleet, nextBitmapBigInt) {
+  const lens = [5, 4, 3, 3, 2];
+  for (let s = 0; s < 5; s++) {
+    const ship = orderedFleet[s];
+    const len = lens[s];
+    let covered = 0;
+    for (let k = 0; k < len; k++) {
+      const cx = ship.orientation === "H" ? ship.x + k : ship.x;
+      const cy = ship.orientation === "V" ? ship.y + k : ship.y;
+      const bit = (nextBitmapBigInt >> BigInt(cy * 10 + cx)) & 1n;
+      if (bit === 1n) covered++;
+    }
+    if (covered === len) return s + 1;
+  }
+  return 0;
+}
+
+async function proveShot({ fleet, salt, x, y, hitBitmapBefore }) {
   const t0 = Date.now();
+  const ordered = canonicalFleet(fleet);
   const board = boardFromFleet(fleet);
   const hit = board[y * 10 + x] === 1;
   const commitment = await commitmentFor(fleet, salt);
+
+  const beforeBig = BigInt(hitBitmapBefore ?? 0);
+  const shotBit = hit ? (1n << BigInt(y * 10 + x)) : 0n;
+  const nextBitmap = beforeBig | shotBit;
+  const sunkShipId = computeSunkShipId(ordered, nextBitmap);
+
+  // Encode hit_bitmap_before as an array of 100 "0"/"1" strings.
+  const bitmapBits = new Array(100);
+  for (let i = 0; i < 100; i++) {
+    bitmapBits[i] = ((beforeBig >> BigInt(i)) & 1n).toString();
+  }
+
+  const shipX = ordered.map((s) => s.x.toString());
+  const shipY = ordered.map((s) => s.y.toString());
+  const shipO = ordered.map((s) => (s.orientation === "H" ? "0" : "1"));
+
   const { noir, backend } = await getShotProver();
   const { witness } = await noir.execute({
-    board: board.map((v) => v.toString()),
+    ship_x: shipX,
+    ship_y: shipY,
+    ship_o: shipO,
     salt,
     commitment,
     x: x.toString(),
     y: y.toString(),
     hit: hit ? "1" : "0",
+    hit_bitmap_before: bitmapBits,
+    sunk_ship_id: sunkShipId.toString(),
   });
   const { proof, publicInputs } = await backend.generateProof(witness, { verifierTarget: "evm" });
-  return { hit, proof: hexFromBytes(proof), publicInputs, ms: Date.now() - t0 };
+  return {
+    hit,
+    sunkShipId,
+    proof: hexFromBytes(proof),
+    publicInputs,
+    ms: Date.now() - t0,
+  };
 }
 
 function readJson(req) {

@@ -31,12 +31,30 @@ contract BattleshipGameTest is Test {
         pi[0] = commitment;
     }
 
-    function _pi4(bytes32 commitment, uint8 x, uint8 y, bool hit) internal pure returns (bytes32[] memory pi) {
-        pi = new bytes32[](4);
+    // Build the new 105-element shot publicInputs:
+    //   [0]      commitment
+    //   [1]      x
+    //   [2]      y
+    //   [3]      hit
+    //   [4..103] hit_bitmap_before (each bit as a separate field)
+    //   [104]    sunk_ship_id
+    function _piShot(
+        bytes32 commitment,
+        uint8 x,
+        uint8 y,
+        bool hit,
+        uint256 bitmapBefore,
+        uint8 sunkShipId
+    ) internal pure returns (bytes32[] memory pi) {
+        pi = new bytes32[](105);
         pi[0] = commitment;
         pi[1] = bytes32(uint256(x));
         pi[2] = bytes32(uint256(y));
         pi[3] = bytes32(uint256(hit ? 1 : 0));
+        for (uint256 i = 0; i < 100; i++) {
+            pi[4 + i] = bytes32((bitmapBefore >> i) & 1);
+        }
+        pi[104] = bytes32(uint256(sunkShipId));
     }
 
     function setUp() public {
@@ -113,12 +131,17 @@ contract BattleshipGameTest is Test {
         uint256 id = _createGame();
         _commitBoth(id);
 
-        // Alice lands 17 hits in a row; bob always responds hit.
+        // Alice lands 17 hits in a row; bob always responds hit. Walk the
+        // canonical bitmap forward so the contract's bitmap check passes.
+        uint256 bmp = 0;
         for (uint8 i = 0; i < 17; i++) {
+            uint8 xi = i % 10;
+            uint8 yi = i / 10;
             vm.prank(alice);
-            game.fireShot(id, i % 10, i / 10);
+            game.fireShot(id, xi, yi);
             vm.prank(bob);
-            game.respondShot(id, true, PROOF, _pi4(bytes32(uint256(0xB2)), i % 10, i / 10, true));
+            game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), xi, yi, true, bmp, 0));
+            bmp |= (uint256(1) << (uint256(yi) * 10 + uint256(xi)));
         }
 
         (,, BattleshipGame.GameState state,,,,,, uint8 hits1, address winner) = game.getGame(id);
@@ -136,7 +159,41 @@ contract BattleshipGameTest is Test {
         shotVerifier.setOk(false);
         vm.prank(bob);
         vm.expectRevert(bytes("invalid shot proof"));
-        game.respondShot(id, true, PROOF, _pi4(bytes32(uint256(0xB2)), 3, 4, true));
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 3, 4, true, 0, 0));
+    }
+
+    function testShipSunkEvent() public {
+        // Sink a length-2 destroyer (ship id 5 in canonical order) by firing
+        // at (0,0) then (1,0). Second shot has bitmap_before bit 0 set and
+        // declares sunk_ship_id=5.
+        uint256 id = _createGame();
+        _commitBoth(id);
+
+        vm.prank(alice);
+        game.fireShot(id, 0, 0);
+        vm.prank(bob);
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 0, 0, true, 0, 0));
+
+        vm.prank(alice);
+        game.fireShot(id, 1, 0);
+        vm.expectEmit(true, true, false, true);
+        emit BattleshipGame.ShipSunk(id, bob, 5);
+        vm.prank(bob);
+        // bitmap_before has bit 0 set (1 << 0 == 1); declare sunk_ship_id=5.
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 1, 0, true, 1, 5));
+
+        assertEq(game.hitBitmapOf(id, 1), uint256(3)); // bits 0 and 1 set
+    }
+
+    function testRespondShotRejectsWrongBitmap() public {
+        uint256 id = _createGame();
+        _commitBoth(id);
+        vm.prank(alice);
+        game.fireShot(id, 5, 5);
+        // Caller tries to pass a non-zero bitmap_before on the first shot.
+        vm.prank(bob);
+        vm.expectRevert(bytes("bitmap mismatch"));
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 5, 5, true, 1, 0));
     }
 
     function testTimeoutWin() public {

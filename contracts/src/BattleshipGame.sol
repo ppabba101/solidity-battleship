@@ -43,11 +43,16 @@ contract BattleshipGame {
 
     uint256 public nextGameId;
     mapping(uint256 => Game) private games;
+    // hitBitmap[gameId][playerIdx] is the canonical 100-bit cumulative hit
+    // bitmap of confirmed hits on player[playerIdx]'s board. Bit (y*10+x) is
+    // set when the contract has verified a HIT response at (x,y).
+    mapping(uint256 => uint256[2]) private hitBitmap;
 
     event GameCreated(uint256 indexed gameId, address indexed creator, address indexed opponent);
     event BoardCommitted(uint256 indexed gameId, address indexed player, bytes32 commitment);
     event ShotFired(uint256 indexed gameId, address indexed shooter, uint8 x, uint8 y);
     event ShotResponded(uint256 indexed gameId, address indexed responder, uint8 x, uint8 y, bool hit);
+    event ShipSunk(uint256 indexed gameId, address indexed responder, uint8 shipId);
     event GameWon(uint256 indexed gameId, address indexed winner);
 
     constructor(address _boardVerifier, address _shotVerifier) {
@@ -121,6 +126,44 @@ contract BattleshipGame {
         emit ShotFired(gameId, msg.sender, x, y);
     }
 
+    // Validates the shot publicInputs against trusted game state and returns
+    // the sunk_ship_id public output. Split out of respondShot to avoid Solidity
+    // "stack too deep" with the 113-slot publicInputs array.
+    //
+    // publicInputs layout (all bytes32):
+    //   [0]        commitment
+    //   [1]        x
+    //   [2]        y
+    //   [3]        hit
+    //   [4..103]   hit_bitmap_before (100 fields, each 0 or 1)
+    //   [104]      sunk_ship_id (0 or 1..=5)
+    //   [105..112] UltraHonk pairing accumulator (8 fields)
+    function _validateShotInputs(
+        uint256 gameId,
+        uint8 responder,
+        bool hit,
+        bytes32[] calldata publicInputs
+    ) internal view returns (uint256 sunkShipId) {
+        Game storage g = games[gameId];
+        require(publicInputs.length >= 105, "bad public inputs");
+        require(publicInputs[0] == g.commitments[responder], "commitment mismatch");
+        require(uint256(publicInputs[1]) == g.pendingX, "x mismatch");
+        require(uint256(publicInputs[2]) == g.pendingY, "y mismatch");
+        require(uint256(publicInputs[3]) == (hit ? 1 : 0), "hit mismatch");
+
+        uint256 expectedBitmap = hitBitmap[gameId][responder];
+        uint256 declaredBitmap = 0;
+        for (uint256 i = 0; i < 100; i++) {
+            uint256 bit = uint256(publicInputs[4 + i]);
+            require(bit <= 1, "bitmap bit not boolean");
+            declaredBitmap |= (bit << i);
+        }
+        require(declaredBitmap == expectedBitmap, "bitmap mismatch");
+
+        sunkShipId = uint256(publicInputs[104]);
+        require(sunkShipId <= 5, "bad sunk id");
+    }
+
     function respondShot(
         uint256 gameId,
         bool hit,
@@ -133,23 +176,18 @@ contract BattleshipGame {
         uint8 responder = 1 - g.turn; // opponent of the shooter responds
         require(g.players[responder] == msg.sender, "not responder");
 
-        // publicInputs[0..3] are the circuit's declared public fields
-        // (commitment, x, y, hit); remaining 8 are the UltraHonk pairing
-        // accumulator. We bind the first four to trusted storage state and
-        // pass the whole array through to the verifier unchanged.
-        require(publicInputs.length >= 4, "bad public inputs");
-        require(publicInputs[0] == g.commitments[responder], "commitment mismatch");
-        require(uint256(publicInputs[1]) == g.pendingX, "x mismatch");
-        require(uint256(publicInputs[2]) == g.pendingY, "y mismatch");
-        require(uint256(publicInputs[3]) == (hit ? 1 : 0), "hit mismatch");
+        uint256 sunkShipId = _validateShotInputs(gameId, responder, hit, publicInputs);
         require(shotVerifier.verify(proof, publicInputs), "invalid shot proof");
 
-        uint8 shooter = g.turn;
-        uint8 x = g.pendingX;
-        uint8 y = g.pendingY;
-        emit ShotResponded(gameId, msg.sender, x, y, hit);
+        emit ShotResponded(gameId, msg.sender, g.pendingX, g.pendingY, hit);
 
         if (hit) {
+            uint256 bit = uint256(1) << (uint256(g.pendingY) * 10 + uint256(g.pendingX));
+            hitBitmap[gameId][responder] |= bit;
+            if (sunkShipId > 0) {
+                emit ShipSunk(gameId, msg.sender, uint8(sunkShipId));
+            }
+            uint8 shooter = g.turn;
             g.hitsScored[shooter] += 1;
             if (g.hitsScored[shooter] >= WIN_HITS) {
                 g.state = GameState.Finished;
@@ -230,6 +268,10 @@ contract BattleshipGame {
 
     function commitmentOf(uint256 gameId, uint8 playerIdx) external view returns (bytes32) {
         return games[gameId].commitments[playerIdx];
+    }
+
+    function hitBitmapOf(uint256 gameId, uint8 playerIdx) external view returns (uint256) {
+        return hitBitmap[gameId][playerIdx];
     }
 
     // ---------------------------------------------------------------------
