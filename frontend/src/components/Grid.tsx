@@ -45,8 +45,11 @@ export function Grid({
         {label}
       </div>
       <div
-        className={`relative grid grid-cols-10 gap-[3px] p-2 bg-navy-deep rounded-lg border border-navy-light shadow-inner transition-opacity ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
-        style={{ width: 360, height: 360 }}
+        className={`relative grid gap-[3px] p-2 bg-navy-deep rounded-lg border border-navy-light shadow-inner transition-opacity w-fit ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+        style={{
+          gridTemplateColumns: "repeat(10, 32px)",
+          gridTemplateRows: "repeat(10, 32px)",
+        }}
         onMouseLeave={onCellLeave}
       >
         {disabled && (
