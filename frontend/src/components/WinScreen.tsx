@@ -16,6 +16,13 @@ interface WinScreenProps {
   hits: number;
   provingMs: number;
   onPlayAgain: () => void;
+  // Escrow integration (WP6). All optional so the local hot-seat path keeps
+  // rendering as before.
+  potEth?: string;
+  paidOut?: boolean;
+  canClaim?: boolean;
+  onClaimPot?: () => void;
+  claiming?: boolean;
 }
 
 export function WinScreen({
@@ -25,6 +32,11 @@ export function WinScreen({
   hits,
   provingMs,
   onPlayAgain,
+  potEth,
+  paidOut,
+  canClaim,
+  onClaimPot,
+  claiming,
 }: WinScreenProps) {
   useEffect(() => {
     if (open && won) {
@@ -53,7 +65,7 @@ export function WinScreen({
 
   return (
     <Dialog open={open}>
-      <DialogContent>
+      <DialogContent data-testid="win-screen">
         <DialogHeader>
           <DialogTitle className="text-3xl">
             {won ? "You Win!" : "You Lose"}
@@ -82,7 +94,31 @@ export function WinScreen({
             </div>
           </div>
         </div>
-        <Button onClick={onPlayAgain}>Play Again</Button>
+        {potEth !== undefined && (
+          <div className="text-center text-sm text-slate-300 pt-2">
+            Pot: <span className="font-semibold text-white">{potEth} ETH</span>
+          </div>
+        )}
+        {canClaim && !paidOut && (
+          <Button
+            data-testid="claim-pot-button"
+            onClick={onClaimPot}
+            disabled={claiming}
+          >
+            {claiming ? "Claiming…" : `Claim ${potEth ?? ""} ETH`}
+          </Button>
+        )}
+        {paidOut && (
+          <div
+            data-testid="paid-out-marker"
+            className="text-center text-sm text-emerald-300 font-semibold py-2"
+          >
+            Pot paid out{potEth ? ` (${potEth} ETH)` : ""}
+          </div>
+        )}
+        <Button onClick={onPlayAgain} variant="secondary">
+          Play Again
+        </Button>
       </DialogContent>
     </Dialog>
   );

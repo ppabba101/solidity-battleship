@@ -333,7 +333,11 @@ export function PlacementBoard({
           >
             Clear
           </Button>
-          <Button onClick={onReady} disabled={!complete || proving}>
+          <Button
+            data-testid="placement-ready"
+            onClick={onReady}
+            disabled={!complete || proving}
+          >
             {proving ? "Proving…" : "Ready"}
           </Button>
         </div>
