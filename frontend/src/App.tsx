@@ -23,7 +23,9 @@ import { randomSalt } from "./lib/prover";
 import {
   simulateBoardValidity,
   simulateShotResponse,
+  resetSimulator,
 } from "./lib/provingSimulator";
+import { clearRecent as clearVizBus } from "./lib/vizBus";
 import { createBurners, getPublicClient } from "./lib/burnerWallets";
 import {
   CONTRACT_ADDRESS,
@@ -81,6 +83,10 @@ export default function App() {
   // tracker stays in sync across re-renders.
   const [p1SunkIds, setP1SunkIds] = useState<Set<string>>(new Set());
   const [p2SunkIds, setP2SunkIds] = useState<Set<string>>(new Set());
+  // Bumped on playAgain so child components holding their own state
+  // (ChainPanel tx/event buffers, BoardToHashViz, ProvingPanel leftover run)
+  // fully remount instead of keeping stale values across games.
+  const [resetKey, setResetKey] = useState(0);
 
   const burners = useMemo(() => createBurners(), []);
 
@@ -434,11 +440,17 @@ export default function App() {
     setP2SunkIds(new Set());
     setSunkAnnouncement(null);
     setPhase("placement");
+    // Clear module-level state that isn't tied to React re-renders.
+    clearVizBus();
+    resetSimulator();
+    // Force ChainPanel, BoardToHashViz, and ProvingPanel to fully remount
+    // so their own useState buffers (tx ring, events, last run) reset.
+    setResetKey((k) => k + 1);
   };
 
   return (
     <div className="h-full flex flex-col">
-      <VizLayer />
+      <VizLayer key={`viz-layer-${resetKey}`} />
       <StatusBar
         player={player}
         onSwitchPlayer={() => setPlayer((player === 0 ? 1 : 0) as 0 | 1)}
@@ -512,7 +524,7 @@ export default function App() {
         </main>
         <aside className="w-96 shrink-0 border-l border-navy-light bg-navy/60 flex flex-col overflow-y-auto">
           <div className="p-3 border-b border-navy-light">
-            <VizSidebar />
+            <VizSidebar key={`viz-sidebar-${resetKey}`} />
           </div>
           <CryptoLog entries={log} />
         </aside>
