@@ -206,6 +206,29 @@ export async function commitmentFor(
 const PROVER_MODE = (import.meta.env.VITE_PROVER_MODE as string | undefined) ?? "real";
 const STUB = PROVER_MODE === "stub";
 
+// Local Node-side prover sidecar. The browser build of @aztec/bb.js
+// 5.0.0-nightly.20260324 emits UltraHonk proofs that revert the deployed
+// Solidity HonkVerifier with SumcheckFailed (0x9fc3a218), while the Node build
+// of the same bb.js version produces proofs that verify cleanly both natively
+// and on-chain. We run bb.js in a local Node sidecar (scripts/prove-sidecar.mjs)
+// and post witnesses to it instead of calling bb.js in the browser.
+const SIDECAR_URL =
+  (import.meta.env.VITE_PROVER_SIDECAR_URL as string | undefined) ??
+  "http://127.0.0.1:8899";
+
+async function postSidecar<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${SIDECAR_URL}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`sidecar ${path} ${res.status}: ${text}`);
+  }
+  return (await res.json()) as T;
+}
+
 const STUB_DELAY_MS_MIN = 2500;
 const STUB_DELAY_MS_RANGE = 2000;
 const ACCUMULATOR_PADDING_FIELDS = 8;
@@ -246,26 +269,18 @@ export async function proveBoardValidity(
     };
   }
 
-  const shipX = ordered.map((s) => s.x.toString());
-  const shipY = ordered.map((s) => s.y.toString());
-  const shipO = ordered.map((s) => (s.orientation === "H" ? "0" : "1"));
-
-  const { noir, backend } = await getBoardProver();
-  const { witness } = await noir.execute({
-    ship_x: shipX,
-    ship_y: shipY,
-    ship_o: shipO,
-    salt,
-    commitment,
-  });
-  const { proof, publicInputs } = await backend.generateProof(witness, {
-    verifierTarget: "evm",
-  });
+  // Delegate real proving to the local Node sidecar.
+  const out = await postSidecar<{
+    commitment: `0x${string}`;
+    proof: `0x${string}`;
+    publicInputs: `0x${string}`[];
+    ms: number;
+  }>("/prove-board", { fleet: ordered, salt });
 
   return {
-    commitment,
-    proof: hexFromBytes(proof),
-    publicInputs: publicInputs.map((p) => p as `0x${string}`),
+    commitment: out.commitment,
+    proof: out.proof,
+    publicInputs: out.publicInputs,
     ms: Math.round(performance.now() - start),
   };
 }
@@ -294,24 +309,21 @@ export async function proveShotResponse(
     };
   }
 
-  const boardInput = board.map((v) => v.toString());
-  const { noir, backend } = await getShotProver();
-  const { witness } = await noir.execute({
-    board: boardInput,
-    salt,
-    commitment,
-    x: x.toString(),
-    y: y.toString(),
-    hit: hit ? "1" : "0",
-  });
-  const { proof, publicInputs } = await backend.generateProof(witness, {
-    verifierTarget: "evm",
-  });
+  // Delegate real proving to the local Node sidecar. The canonical fleet
+  // is sent so the sidecar can recompute the 100-cell board identically.
+  const ordered = canonicalFleet(fleet);
+  void commitment; // commitment is recomputed inside the sidecar and returned in publicInputs[0]
+  const out = await postSidecar<{
+    hit: boolean;
+    proof: `0x${string}`;
+    publicInputs: `0x${string}`[];
+    ms: number;
+  }>("/prove-shot", { fleet: ordered, salt, x, y });
 
   return {
-    hit,
-    proof: hexFromBytes(proof),
-    publicInputs: publicInputs.map((p) => p as `0x${string}`),
+    hit: out.hit,
+    proof: out.proof,
+    publicInputs: out.publicInputs,
     ms: Math.round(performance.now() - start),
   };
 }
