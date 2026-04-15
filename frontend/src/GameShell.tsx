@@ -45,6 +45,8 @@ import {
   watchGameEvents,
 } from "./lib/contract";
 import { useActiveWalletClient, basePublicClient } from "./lib/privyClient";
+import { useSeat, type Seat } from "./lib/useSeat";
+import { useRemoteGameState } from "./lib/useRemoteGameState";
 import { baseSepoliaChain } from "./lib/rpcConfig";
 import { playSfx } from "./lib/sfx";
 import { formatEther } from "viem";
@@ -111,7 +113,12 @@ export interface GameShellProps {
   privyAddress?: `0x${string}` | null;
 }
 
-export function GameShell({
+export function GameShell(props: GameShellProps) {
+  if (props.mode === "local") return <LocalGameShell {...props} />;
+  return <RemoteGameShell {...props} />;
+}
+
+function LocalGameShell({
   mode,
   urlGameId,
   contractAddress,
@@ -877,6 +884,541 @@ export function GameShell({
         potEth={!isLocal && escrow ? potEth : undefined}
         paidOut={!isLocal && escrow ? escrow.paidOut : undefined}
         canClaim={!isLocal && winner === player && !!escrow && !escrow.paidOut}
+        onClaimPot={handleClaimPot}
+        claiming={actionPending === "claim"}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Remote (Privy) game shell — seat-aware single-player view.
+// ---------------------------------------------------------------------------
+
+function RemoteGameShell({
+  mode,
+  urlGameId,
+  contractAddress,
+  privyCtx,
+  privyAddress,
+}: GameShellProps) {
+  const effectiveAddress = (contractAddress ?? CONTRACT_ADDRESS) as `0x${string}`;
+  const ctx: ContractCtx | null = privyCtx ?? null;
+  const gameId =
+    urlGameId && urlGameId.length > 0
+      ? (() => {
+          try {
+            return BigInt(urlGameId);
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+
+  const { status, refetch } = useSeat({
+    ctx,
+    gameId,
+    myAddress: privyAddress ?? null,
+  });
+
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [autoJoinCancelled, setAutoJoinCancelled] = useState(false);
+
+  // Auto-join countdown: when we land on a joinable game via share link,
+  // wait 2 s then fire joinGame unless the user clicks Cancel.
+  useEffect(() => {
+    if (status.kind !== "joinable") return;
+    if (autoJoinCancelled) return;
+    if (!ctx || gameId === null) return;
+    const handle = window.setTimeout(async () => {
+      setJoining(true);
+      setJoinError(null);
+      try {
+        await contractJoinGame(ctx, gameId, status.stakeWei);
+        refetch();
+      } catch (e) {
+        setJoinError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setJoining(false);
+      }
+    }, 2000);
+    return () => window.clearTimeout(handle);
+  }, [status, ctx, gameId, refetch, autoJoinCancelled]);
+
+  const onManualJoin = async () => {
+    if (status.kind !== "joinable" || !ctx || gameId === null) return;
+    setJoining(true);
+    setJoinError(null);
+    try {
+      await contractJoinGame(ctx, gameId, status.stakeWei);
+      refetch();
+    } catch (e) {
+      setJoinError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      {mode === "preview" && (
+        <div
+          data-testid="preview-banner"
+          className="w-full bg-amber-900/50 border-b border-amber-600 text-amber-100 text-xs px-4 py-2 text-center"
+        >
+          Preview mode — proofs are simulated for UX testing. Switch to Real
+          mode for cryptographic guarantees.
+        </div>
+      )}
+      <div className="flex-1 overflow-auto p-8">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="space-y-1">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-orange font-semibold">
+              {mode === "preview" ? "Preview" : "Real"} game
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Game #{gameId !== null ? gameId.toString() : "?"}
+            </h1>
+            <p className="text-slate-500 text-[11px] font-mono break-all">
+              contract: {effectiveAddress}
+            </p>
+            {privyAddress && (
+              <p className="text-slate-500 text-[11px] font-mono break-all">
+                you: {privyAddress}
+              </p>
+            )}
+          </div>
+
+          {status.kind === "loading" && (
+            <div className="text-slate-300">Loading game state…</div>
+          )}
+
+          {status.kind === "not-found" && (
+            <div className="text-slate-300">
+              Game not found.{" "}
+              <a href="/" className="text-orange underline">
+                Back to lobby
+              </a>
+            </div>
+          )}
+
+          {status.kind === "error" && (
+            <div className="space-y-2">
+              <div className="text-red-300 text-sm break-all">
+                {status.error.message}
+              </div>
+              <button
+                onClick={refetch}
+                className="px-3 py-1 rounded border border-slate-600 text-slate-200 text-sm hover:bg-slate-800"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {status.kind === "spectator" && (
+            <div className="text-slate-300">
+              You're not a player in this game.{" "}
+              <a href="/" className="text-orange underline">
+                Back to lobby
+              </a>
+            </div>
+          )}
+
+          {status.kind === "joinable" && (
+            <div className="space-y-3 p-4 rounded border border-slate-700 bg-navy-light/40">
+              <div className="text-sm text-slate-200">
+                Creator{" "}
+                <span className="font-mono text-xs">
+                  {status.creatorAddress.slice(0, 10)}…
+                </span>{" "}
+                wagered{" "}
+                <span className="font-semibold text-white">
+                  {Number(formatEther(status.stakeWei)).toFixed(4)} ETH
+                </span>
+                {" · "}clock {status.clockSeconds}s
+              </div>
+              {!autoJoinCancelled && !joining && (
+                <div className="text-amber-300 text-xs">
+                  Auto-joining in 2 seconds…
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  data-testid="remote-join-button"
+                  onClick={onManualJoin}
+                  disabled={joining}
+                  className="px-3 py-1.5 text-sm rounded bg-orange text-navy font-semibold disabled:opacity-50"
+                >
+                  {joining
+                    ? "Joining…"
+                    : `Join (${Number(formatEther(status.stakeWei)).toFixed(4)} ETH)`}
+                </button>
+                {!autoJoinCancelled && (
+                  <button
+                    onClick={() => setAutoJoinCancelled(true)}
+                    disabled={joining}
+                    className="px-3 py-1.5 text-sm rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
+                  >
+                    Cancel auto-join
+                  </button>
+                )}
+              </div>
+              {joinError && (
+                <div className="text-xs text-red-300 break-all">{joinError}</div>
+              )}
+            </div>
+          )}
+
+          {status.kind === "seated" && ctx && gameId !== null && privyAddress && (
+            <SeatedRemoteGame
+              ctx={ctx}
+              gameId={gameId}
+              mySeat={status.seat}
+              opponentAddress={status.opponentAddress}
+              myAddress={privyAddress}
+              mode={mode}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SeatedRemoteGameProps {
+  ctx: ContractCtx;
+  gameId: bigint;
+  mySeat: Seat;
+  opponentAddress: `0x${string}`;
+  myAddress: `0x${string}`;
+  mode: ActiveMode;
+}
+
+interface MyPlayerState {
+  fleet: Fleet;
+  salt: `0x${string}`;
+  commitment: `0x${string}` | null;
+  ownCells: CellState[];
+}
+
+function blankMyPlayer(): MyPlayerState {
+  return {
+    fleet: [],
+    salt: randomSalt(),
+    commitment: null,
+    ownCells: Array(BOARD_CELLS).fill("EMPTY"),
+  };
+}
+
+function bitmapToHitCells(bitmap: bigint): Set<number> {
+  const out = new Set<number>();
+  for (let i = 0; i < BOARD_CELLS; i++) {
+    if ((bitmap >> BigInt(i)) & 1n) out.add(i);
+  }
+  return out;
+}
+
+function SeatedRemoteGame({
+  ctx,
+  gameId,
+  mySeat,
+  opponentAddress,
+  myAddress,
+  mode,
+}: SeatedRemoteGameProps) {
+  const { state: remote, refetch } = useRemoteGameState({
+    ctx,
+    gameId,
+    mySeat,
+  });
+  const [me, setMe] = useState<MyPlayerState>(blankMyPlayer());
+  const [proving, setProving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [log, setLog] = useState<LogEntry[]>([]);
+  const [escrow, setEscrow] = useState<GameEscrow | null>(null);
+  const [actionPending, setActionPending] = useState<string | null>(null);
+  const inRoundRef = useRef(false);
+
+  const appendLog = (text: string, meta?: Partial<LogEntry>) => {
+    setLog((l) => [
+      ...l,
+      {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        text,
+        ...meta,
+      },
+    ]);
+  };
+
+  // Refresh escrow alongside game state for the WinScreen / pot UI.
+  useEffect(() => {
+    let cancelled = false;
+    const readCtx = { address: ctx.address, publicClient: ctx.publicClient };
+    async function poll() {
+      try {
+        const e = await readGameEscrow(readCtx, gameId);
+        if (!cancelled) setEscrow(e);
+      } catch {
+        /* non-fatal */
+      }
+    }
+    poll();
+    const id = window.setInterval(poll, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [ctx, gameId]);
+
+  const phase = remote?.phase ?? "placement";
+  const isMyTurnToFire =
+    !!remote && remote.phase === "playing" && !remote.shotPending && remote.turn === mySeat;
+  const isMyTurnToRespond =
+    !!remote &&
+    remote.phase === "playing" &&
+    remote.shotPending &&
+    remote.turn === ((1 - mySeat) as Seat);
+
+  // When opponent fires, automatically prove + submit our shot response.
+  // Guard with inRoundRef to keep pollers from triggering duplicate sends.
+  useEffect(() => {
+    if (!remote || !isMyTurnToRespond) return;
+    if (!me.commitment || me.fleet.length !== 5) return;
+    if (inRoundRef.current) return;
+    inRoundRef.current = true;
+    (async () => {
+      try {
+        const x = remote.pendingX;
+        const y = remote.pendingY;
+        setProving(`Proving response (${x},${y})…`);
+        const { hit, proof, publicInputs, ms } = await simulateShotResponse(
+          me.fleet,
+          me.salt,
+          x,
+          y,
+          remote.myHitBitmap,
+        );
+        appendLog(
+          `prove respond (${x},${y}) ${hit ? "HIT" : "MISS"} (${(ms / 1000).toFixed(2)}s)`,
+        );
+        setProving("Submitting response on-chain…");
+        await contractRespondShot(mySeat, gameId, hit, proof, publicInputs, ctx);
+        appendLog(`✓ respondShot tx mined`);
+        refetch();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("respondShot failed", e);
+        setError(`respondShot failed: ${msg}`);
+      } finally {
+        setProving(null);
+        inRoundRef.current = false;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyTurnToRespond, remote?.pendingX, remote?.pendingY, me.commitment]);
+
+  const onReady = async () => {
+    setProving("Proving your board…");
+    try {
+      const { commitment, proof, publicInputs, ms } = await simulateBoardValidity(
+        me.fleet,
+        me.salt,
+      );
+      appendLog(`prove board (${(ms / 1000).toFixed(2)}s)`);
+      setProving("Submitting commitBoard on-chain…");
+      const tx = await contractCommitBoard(
+        mySeat,
+        gameId,
+        commitment,
+        proof,
+        publicInputs,
+        ctx,
+      );
+      appendLog(`✓ commitBoard tx ${tx.slice(0, 10)}…`);
+      setMe({
+        ...me,
+        commitment,
+        ownCells: placeFleet(me.fleet),
+      });
+      refetch();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("commitBoard failed", e);
+      setError(`commitBoard failed: ${msg}`);
+    } finally {
+      setProving(null);
+    }
+  };
+
+  const fireAt = async (i: number) => {
+    if (!isMyTurnToFire || !remote) return;
+    if (inRoundRef.current) return;
+    inRoundRef.current = true;
+    try {
+      const x = i % BOARD_SIZE;
+      const y = Math.floor(i / BOARD_SIZE);
+      setProving("Submitting fireShot on-chain…");
+      await contractFireShot(mySeat, gameId, x, y, ctx);
+      appendLog(`✓ fireShot (${x},${y})`);
+      refetch();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("fireShot failed", e);
+      setError(`fireShot failed: ${msg}`);
+    } finally {
+      setProving(null);
+      inRoundRef.current = false;
+    }
+  };
+
+  const handleClaimPot = async () => {
+    setActionPending("claim");
+    try {
+      await contractClaimPot(ctx, gameId);
+      appendLog("✓ claimPot");
+      const e = await readGameEscrow(
+        { address: ctx.address, publicClient: ctx.publicClient },
+        gameId,
+      );
+      setEscrow(e);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  // Build defense (my fleet + opponent's hits on me) and offense (my hits on
+  // opponent) cell views from on-chain state.
+  const defenseCells: CellState[] = (() => {
+    const base = placeFleet(me.fleet);
+    if (!remote) return base;
+    const hits = bitmapToHitCells(remote.myHitBitmap);
+    for (const i of hits) {
+      base[i] = base[i] === "OWN_SHIP" ? "OWN_SHIP_HIT" : "OWN_MISS";
+    }
+    return base;
+  })();
+
+  const offenseCells: CellState[] = (() => {
+    const cells: CellState[] = Array(BOARD_CELLS).fill("UNKNOWN");
+    if (!remote) return cells;
+    // We don't know misses (no chain record of misses on the offense view in
+    // single-seat mode without per-shot indexing); show landed hits only.
+    const hits = bitmapToHitCells(remote.opponentHitBitmap);
+    for (const i of hits) cells[i] = "CONFIRMED_HIT";
+    if (remote.shotPending && remote.turn === mySeat) {
+      // We fired and are awaiting opponent's response.
+      const i = remote.pendingY * BOARD_SIZE + remote.pendingX;
+      if (cells[i] === "UNKNOWN") cells[i] = "PENDING_SHOT";
+    }
+    return cells;
+  })();
+
+  const finished = remote?.phase === "finished";
+  const won =
+    finished && remote?.winner.toLowerCase() === myAddress.toLowerCase();
+  const potEth =
+    escrow && escrow.pot > 0n
+      ? Number(formatEther(escrow.pot)).toFixed(4)
+      : "0";
+  void mode;
+  void opponentAddress;
+
+  return (
+    <div className="space-y-6">
+      <div className="text-xs text-slate-400">
+        Seat {mySeat} · opponent{" "}
+        <span className="font-mono">{opponentAddress.slice(0, 10)}…</span>
+      </div>
+
+      {phase === "placement" && !me.commitment && (
+        <div data-testid="remote-placement">
+          <h2 className="text-xl font-semibold mb-3">Place your fleet</h2>
+          <PlacementBoard
+            fleet={me.fleet}
+            setFleet={(f) => setMe({ ...me, fleet: f })}
+            onReady={onReady}
+            proving={!!proving}
+          />
+        </div>
+      )}
+
+      {phase === "placement" && me.commitment && (
+        <div className="text-slate-200">
+          ✓ Your board is committed. Waiting for opponent to commit…
+        </div>
+      )}
+
+      {phase === "playing" && (
+        <div className="space-y-4">
+          <div className="text-sm">
+            {isMyTurnToFire && (
+              <span className="text-orange font-semibold">
+                Your turn — fire on Enemy Waters
+              </span>
+            )}
+            {isMyTurnToRespond && (
+              <span className="text-amber-300 font-semibold">
+                Opponent fired ({remote!.pendingX},{remote!.pendingY}) — proving
+                response…
+              </span>
+            )}
+            {!isMyTurnToFire && !isMyTurnToRespond && (
+              <span className="text-slate-400">Waiting for opponent…</span>
+            )}
+          </div>
+          <div className="flex gap-10 items-start flex-wrap">
+            <Grid cells={defenseCells} label="Your Fleet" />
+            <Grid
+              cells={offenseCells}
+              label="Enemy Waters"
+              onCellClick={fireAt}
+              disabled={!isMyTurnToFire || !!proving}
+            />
+          </div>
+        </div>
+      )}
+
+      {proving && (
+        <div className="text-xs text-slate-400">{proving}</div>
+      )}
+
+      {error && (
+        <div className="text-xs text-red-300 break-all">
+          {error}{" "}
+          <button
+            onClick={() => setError(null)}
+            className="underline ml-2"
+          >
+            dismiss
+          </button>
+        </div>
+      )}
+
+      {log.length > 0 && (
+        <div className="text-[11px] text-slate-500 font-mono space-y-0.5 pt-2 border-t border-slate-800">
+          {log.slice(-6).map((l) => (
+            <div key={l.id}>{l.text}</div>
+          ))}
+        </div>
+      )}
+
+      <WinScreen
+        open={finished}
+        won={!!won}
+        shots={remote?.myHits ?? 0}
+        hits={remote?.myHits ?? 0}
+        provingMs={0}
+        onPlayAgain={() => {
+          window.location.href = "/";
+        }}
+        potEth={escrow ? potEth : undefined}
+        paidOut={escrow ? escrow.paidOut : undefined}
+        canClaim={!!won && !!escrow && !escrow.paidOut}
         onClaimPot={handleClaimPot}
         claiming={actionPending === "claim"}
       />

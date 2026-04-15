@@ -197,6 +197,16 @@ export const BATTLESHIP_ABI = [
   },
   {
     type: "function",
+    name: "commitmentOf",
+    inputs: [
+      { name: "gameId", type: "uint256" },
+      { name: "playerIdx", type: "uint8" },
+    ],
+    outputs: [{ type: "bytes32" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "hitBitmapOf",
     inputs: [
       { name: "gameId", type: "uint256" },
