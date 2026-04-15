@@ -111,17 +111,23 @@ fn main(
         let y0 = ship_y[s];
         let o = ship_o[s];
         let mut covered: Field = 0;
+        let mut touched_by_this_shot: Field = 0;
         for k in 0..5 {
             if k < len {
                 let dx = if o == 0 { k } else { 0 };
                 let dy = if o == 0 { 0 } else { k };
                 let cell_idx = (y0 + dy) * BOARD_SIZE + (x0 + dx);
                 covered = covered + bitmap_after[cell_idx];
+                // Did this shot hit this specific ship cell?
+                let matches: Field = (cell_idx == shot_idx) as Field;
+                touched_by_this_shot = touched_by_this_shot + matches;
             }
         }
-        // is_sunk = (covered == len). Emit (s+1) if sunk, else 0.
+        // newly_sunk = is_sunk AND touched AND hit. Since ships do not overlap,
+        // at most one ship can be newly sunk per shot.
         let is_sunk: Field = (covered == (len as Field)) as Field;
-        let this_id: Field = ((s + 1) as Field) * is_sunk;
+        let newly_sunk: Field = is_sunk * touched_by_this_shot * hit;
+        let this_id: Field = ((s + 1) as Field) * newly_sunk;
         computed_sunk = computed_sunk + this_id;
     }
 

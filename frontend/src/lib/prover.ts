@@ -293,18 +293,24 @@ const CANONICAL_SHIP_LENS = [5, 4, 3, 3, 2] as const;
 function computeSunkShipIdFromFleet(
   orderedFleet: Ship[],
   nextBitmap: bigint,
+  shotX: number,
+  shotY: number,
+  hit: boolean,
 ): number {
+  if (!hit) return 0;
   for (let s = 0; s < orderedFleet.length; s++) {
     const ship = orderedFleet[s];
     const len = CANONICAL_SHIP_LENS[s];
+    let touchedByShot = false;
     let covered = 0;
     for (let k = 0; k < len; k++) {
       const cx = ship.orientation === "H" ? ship.x + k : ship.x;
       const cy = ship.orientation === "V" ? ship.y + k : ship.y;
+      if (cx === shotX && cy === shotY) touchedByShot = true;
       const bit = (nextBitmap >> BigInt(cy * 10 + cx)) & 1n;
       if (bit === 1n) covered++;
     }
-    if (covered === len) return s + 1;
+    if (touchedByShot && covered === len) return s + 1;
   }
   return 0;
 }
@@ -338,7 +344,7 @@ export async function proveShotResponse(
     const ordered = canonicalFleet(fleet);
     const nextBitmap =
       hitBitmapBefore | (hit ? 1n << BigInt(y * 10 + x) : 0n);
-    const sunkShipId = computeSunkShipIdFromFleet(ordered, nextBitmap);
+    const sunkShipId = computeSunkShipIdFromFleet(ordered, nextBitmap, x, y, hit);
     const sunkHex = ("0x" +
       sunkShipId.toString(16).padStart(64, "0")) as `0x${string}`;
     return {

@@ -185,6 +185,51 @@ contract BattleshipGameTest is Test {
         assertEq(game.hitBitmapOf(id, 1), uint256(3)); // bits 0 and 1 set
     }
 
+    function testMultiSinkSequence() public {
+        // Sink destroyer (ship id 5) at (0,0),(1,0), then sink submarine
+        // (ship id 4, length 3) at (0,1),(1,1),(2,1). After shot 5 the
+        // destroyer is already sunk — the emitted ShipSunk must be id=4,
+        // NOT 5 or 9 (sum of both).
+        uint256 id = _createGame();
+        _commitBoth(id);
+
+        // Shot 1: destroyer (0,0) — no sink.
+        vm.prank(alice);
+        game.fireShot(id, 0, 0);
+        vm.prank(bob);
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 0, 0, true, 0, 0));
+
+        // Shot 2: destroyer (1,0) — sinks ship 5.
+        vm.prank(alice);
+        game.fireShot(id, 1, 0);
+        vm.prank(bob);
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 1, 0, true, 1, 5));
+
+        // Shot 3: submarine (0,1) — no sink. bitmap has bits 0,1 set.
+        uint256 bmp = 3;
+        vm.prank(alice);
+        game.fireShot(id, 0, 1);
+        vm.prank(bob);
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 0, 1, true, bmp, 0));
+        bmp |= (uint256(1) << 10);
+
+        // Shot 4: submarine (1,1) — no sink.
+        vm.prank(alice);
+        game.fireShot(id, 1, 1);
+        vm.prank(bob);
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 1, 1, true, bmp, 0));
+        bmp |= (uint256(1) << 11);
+
+        // Shot 5: submarine (2,1) — sinks ship 4. Destroyer is already
+        // sunk, so the multi-sink bug would have reported 9; we expect 4.
+        vm.prank(alice);
+        game.fireShot(id, 2, 1);
+        vm.expectEmit(true, true, false, true);
+        emit BattleshipGame.ShipSunk(id, bob, 4);
+        vm.prank(bob);
+        game.respondShot(id, true, PROOF, _piShot(bytes32(uint256(0xB2)), 2, 1, true, bmp, 4));
+    }
+
     function testRespondShotRejectsWrongBitmap() public {
         uint256 id = _createGame();
         _commitBoth(id);

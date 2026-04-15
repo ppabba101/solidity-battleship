@@ -144,19 +144,22 @@ async function proveBoard({ fleet, salt }) {
 // Given a canonical fleet (length-5 ordered array) and a post-shot bitmap
 // (BigInt with one bit per cell, (y*10+x)), return the canonical 1..=5 ship
 // id of a fully-covered ship or 0 if none. Mirrors the Noir circuit's logic.
-function computeSunkShipId(orderedFleet, nextBitmapBigInt) {
+function computeSunkShipId(orderedFleet, nextBitmapBigInt, shotX, shotY, hit) {
+  if (!hit) return 0;
   const lens = [5, 4, 3, 3, 2];
   for (let s = 0; s < 5; s++) {
     const ship = orderedFleet[s];
     const len = lens[s];
+    let touchedByShot = false;
     let covered = 0;
     for (let k = 0; k < len; k++) {
       const cx = ship.orientation === "H" ? ship.x + k : ship.x;
       const cy = ship.orientation === "V" ? ship.y + k : ship.y;
+      if (cx === shotX && cy === shotY) touchedByShot = true;
       const bit = (nextBitmapBigInt >> BigInt(cy * 10 + cx)) & 1n;
       if (bit === 1n) covered++;
     }
-    if (covered === len) return s + 1;
+    if (touchedByShot && covered === len) return s + 1;
   }
   return 0;
 }
@@ -171,7 +174,7 @@ async function proveShot({ fleet, salt, x, y, hitBitmapBefore }) {
   const beforeBig = BigInt(hitBitmapBefore ?? 0);
   const shotBit = hit ? (1n << BigInt(y * 10 + x)) : 0n;
   const nextBitmap = beforeBig | shotBit;
-  const sunkShipId = computeSunkShipId(ordered, nextBitmap);
+  const sunkShipId = computeSunkShipId(ordered, nextBitmap, x, y, hit);
 
   // Encode hit_bitmap_before as an array of 100 "0"/"1" strings.
   const bitmapBits = new Array(100);
