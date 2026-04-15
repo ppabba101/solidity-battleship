@@ -20,22 +20,20 @@
 
 ## Goal
 
-Take the current single-machine hot-seat Battleship.zk demo and ship a **publicly playable multiplayer version** that two strangers on two separate browsers can play against each other with real zk cheat-resistance, without ever touching a traditional wallet or buying ETH.
+Take the current single-machine hot-seat Battleship.zk demo and ship a **publicly playable multiplayer version** on **Base Sepolia (a real live L2 testnet)** that two strangers on two separate browsers can play against each other with real zk cheat-resistance. Sepolia ETH (free from faucets) stands in for real ETH so we see genuine network behavior with zero financial risk; mainnet promotion is post-v1.
 
 The game is **free-play, real-time, short-clock**. A player clicks "New Game", gets a share link, sends it to a friend, both join, both place fleets, both prove board legality in their browser, they play a round, someone wins, rematch button. Matches take 5–10 minutes start to finish.
 
-The cryptographic novelty (provable cheat-resistance) is the draw — no stakes, no leaderboard, no ELO.
+The cryptographic novelty (provable cheat-resistance) is the draw, **backed by real on-chain ETH stakes** — players wager real ETH per game, winner takes the pot, no leaderboard/ELO.
 
 **The existing demo (`scripts/demo-fast.sh` + MockVerifier) stays fully working as the local-development path.** Nothing in this spec breaks the demo. The real-game work ships as an *additional* deployment target, not a replacement.
 
 ## Non-Goals
-- ETH stakes, escrow, bets, or prize pools
 - Global leaderboards, ELO, ranking, seasons, tournaments
 - Async play with email/push notifications
 - Long-form persistent games (>30 minutes)
 - Custom rule variants or alternate fleet sizes
 - Mobile-first responsive UI (desktop targets only; mobile can be a follow-up)
-- Mainnet deployment in v1 (L2 testnet is the MVP target; mainnet is a post-MVP decision)
 - Anti-collusion or chat moderation
 - Spectator mode
 - Replacing the existing local demo — the demo stays
@@ -44,7 +42,7 @@ The cryptographic novelty (provable cheat-resistance) is the draw — no stakes,
 
 ### Onboarding
 - [ ] Player opens `https://<deploy-url>`, clicks "Sign in", signs in with email or Google via Privy (or Dynamic), lands inside the app with an embedded wallet already provisioned
-- [ ] No MetaMask install required, no seed phrase shown, no ETH required in wallet
+- [ ] No MetaMask install required, no seed phrase shown — but players DO need to fund their embedded wallet with Sepolia ETH (from a faucet) to stake and pay gas (see Real-ETH economics below)
 - [ ] Sign-in state persists across page reloads (localStorage or httpOnly cookie from the auth provider)
 
 ### Game creation & matchmaking
@@ -52,10 +50,14 @@ The cryptographic novelty (provable cheat-resistance) is the draw — no stakes,
 - [ ] "Public Games" tab on landing page lists open gameIds pulled from `GameCreated` events with `opponent == 0x0` (no opponent yet), filtered to games created in the last N minutes
 - [ ] Clicking a public-games entry or opening a share-link URL joins that game as player 2 (the contract updates `opponent` via a `joinGame(gameId)` call), both players land in the placement screen
 
-### Sponsored gas
-- [ ] All player-side transactions (`createGame`, `joinGame`, `commitBoard`, `fireShot`, `respondShot`, `claimTimeoutWin`) are sponsored — the player signs the user-op, a paymaster pays gas
-- [ ] Works on Base Sepolia via Alchemy/Biconomy/Privy's built-in paymaster (choose during planning based on cost + DX)
-- [ ] Player's embedded wallet balance shows 0 ETH and the game still works end-to-end
+### Real-ETH economics (no sponsorship)
+- [ ] Players pay their own gas out of their Privy embedded wallet — **no paymaster, no sponsorship**. The "you need ETH" story is honest and consistent with the stake model.
+- [ ] First-run onboarding shows the wallet address + a "Fund wallet" panel with (a) QR code, (b) copyable address, (c) direct links to Base Sepolia faucets (Coinbase CDP faucet, Alchemy faucet, QuickNode faucet), (d) a visible reminder: "this is Base Sepolia — the ETH is testnet ETH from a faucet, not real money. You need enough for your stake + gas for ~3 txs."
+- [ ] Game creation UI has a **stake input field** — creator picks any amount ≥ `MIN_STAKE` (contract-enforced floor, e.g. 0.0001 ETH, to prevent spam) and ≤ wallet balance
+- [ ] `createGame(opponent=0x0, clockSeconds, stakeWei)` is `payable` and locks exactly `stakeWei` from the creator
+- [ ] `joinGame(gameId)` is `payable` and requires `msg.value == game.stakeWei` — joiner matches the creator's stake exactly; mismatched value reverts
+- [ ] Public-games lobby shows each open game's stake prominently; filter/sort by stake
+- [ ] Pre-game UI warns if wallet balance is below (stake + estimated gas buffer) and disables "Create"/"Join" until funded
 
 ### Real zk proving (UPDATED after Lane AA — sidecar is the path forward)
 
@@ -88,6 +90,21 @@ The local-sidecar path works for the current demo but creates a deployment probl
 - [ ] Public deployment decision documented as Option E + Option B hybrid
 - [ ] Real-proving mode is available via "Advanced → Run your own prover" settings for users who want cryptographic guarantees now
 
+### Escrow & payout (the new goal)
+- [ ] Stake is held in-contract from `joinGame` until game resolution; no separate escrow contract (avoids cross-contract auth complexity) — stake sits in `Game.pot = 2 * stakeWei`
+- [ ] **Normal win** (reached WIN_HITS): winner can call `claimPot(gameId)`; contract transfers `pot` to winner via `call{value: pot}`, zeroes `pot`, marks `paidOut = true`. Re-entrancy guard required (CEI pattern + `paidOut` flag).
+- [ ] **Timeout win**: `claimTimeoutWin(gameId)` already transfers game state to Finished; extend it so the same tx also pays out the full pot to the claimant in one call. The laggard forfeits everything they staked.
+- [ ] **Creator abort (no joiner yet)**: `cancelGame(gameId)` is callable by the creator iff `state == Created && player2 == address(0)`; refunds full stake to creator. Anyone can also call it after `ABORT_TIMEOUT` (e.g. 1 hour) if a game sits unjoined.
+- [ ] **Mutual draw / abort mid-game**: `proposeDraw(gameId)` sets a `drawProposed[gameId][msg.sender] = true` flag; when both flags are set, contract refunds each player their original `stakeWei` (they each eat their own gas — no rake). State goes to `Finished` with `winner == address(0)`.
+- [ ] **Proposer-only draw withdrawal**: if only one player has proposed and they change their mind, `withdrawDrawProposal(gameId)` unsets the flag. Prevents a bad-faith "I proposed draw, now respond" trap.
+- [ ] **Double-forfeit edge case**: if a game is in `Committed` state (both committed, nobody has fired) and both clocks expire simultaneously, `claimTimeoutWin` goes to whichever player calls it first — whoever moves first in the real world gets the pot. Document the race explicitly.
+- [ ] **Commit-phase timeout**: if P1 committed but P2 never committed within commit clock, P1 calls `claimTimeoutWin` and gets both stakes. (This is the existing `Committed`-state timeout path, extended to pay the pot.)
+- [ ] **Post-finalization safety**: once `paidOut == true`, all payout/refund paths revert. Once `state == Finished`, no new moves accepted. No path lets a stake get stuck: every terminal state either paid out or refunded.
+- [ ] Contract exposes `getGame(gameId)` with `stakeWei`, `pot`, `paidOut`, `drawProposed[0]`, `drawProposed[1]` so the frontend can render state accurately
+- [ ] All payout paths emit events: `PotPaid(gameId, to, amount)`, `StakeRefunded(gameId, to, amount)`, `DrawProposed(gameId, by)`, `GameCanceled(gameId)`
+- [ ] **Protocol fee**: v1 has zero protocol fee (winner gets full `2 * stakeWei`). Fee hook is left as a TODO — not a v1 goal.
+- [ ] Fuzz + invariant tests: sum of all `pot` balances in active games == contract ETH balance; no path reaches `Finished` with `pot > 0 && paidOut == false` that isn't draw-claimable
+
 ### Real-time game pace
 - [ ] Each move has a 60-second clock (configurable per game at creation time: 30s / 60s / 120s)
 - [ ] Clock is enforced on-chain via block timestamps: `claimTimeoutWin(gameId)` lets the non-stalling player claim a win if the other player hasn't moved within the clock window
@@ -101,7 +118,9 @@ The local-sidecar path works for the current demo but creates a deployment probl
 
 ### Deployment
 - [ ] Frontend deployed to Vercel / Cloudflare Pages / Netlify as a static site (no backend server)
-- [ ] BattleshipGame + HonkVerifier contracts deployed on Base Sepolia (MVP) with a documented deploy address in the README
+- [ ] **v1 target is Base Sepolia** — a real live L2 testnet, not local Anvil. Stakes are denominated in Sepolia ETH (free from faucets) so we can observe real network behavior — block times, RPC latency, confirmation UX, gas costs, mempool — without putting real money at risk. Mainnet promotion is a post-v1 decision gated on v1 going smoothly.
+- [ ] Contracts deployed on Base Sepolia, verified on Base Sepolia Basescan, address committed to README
+- [ ] Contract is **non-upgradeable** (immutable) from day one — no admin keys, no pause, no fee switch. Same safety posture as mainnet would require, so the Sepolia deploy is a true rehearsal.
 - [ ] Public demo URL is shareable and loads the app for anyone
 - [ ] COOP/COEP headers are set in production (via `vercel.json` or Cloudflare Pages `_headers` file) so multi-threaded bb.js works
 
@@ -114,7 +133,7 @@ The local-sidecar path works for the current demo but creates a deployment probl
 ## Assumptions Exposed & Resolved
 | Assumption | Challenge | Resolution |
 |---|---|---|
-| "Real game means mainnet + stakes" | Contrarian: zero-stake play is enough when zk is the draw | Free play only; L2 testnet first, mainnet later |
+| "Real game means mainnet + stakes" | Revisited: zk cheat-resistance is most convincing when money is actually on the line | **REVERSED** — Base mainnet with real player-chosen ETH stakes is now the v1 goal |
 | "Users need MetaMask" | Is the target audience crypto natives? | No — email/Google login via Privy, sponsored gas |
 | "We need a backend for matchmaking" | On-chain events can be the matchmaking substrate | No backend; share links + on-chain event scan |
 | "Async chess-style play is the real experience" | Does Battleship actually benefit from async? | No — real-time with a clock matches how humans play Battleship IRL |
@@ -135,20 +154,28 @@ The local-sidecar path works for the current demo but creates a deployment probl
 ### What needs to be added
 
 **Contracts:**
-- `joinGame(uint256 gameId)` — lets player 2 join a game created with `opponent == address(0)`
-- Modify `createGame(address opponent)` to accept `address(0)` as "open game, anyone can join"
-- Emit enriched `GameCreated(gameId, creator, opponent, clockSeconds)` so the lobby can index open games
+- `createGame(address opponent, uint32 clockSeconds, uint256 stakeWei)` is now `payable`; requires `msg.value == stakeWei` and `stakeWei >= MIN_STAKE`; `opponent == address(0)` allowed for open games
+- `joinGame(uint256 gameId)` is `payable`; requires `msg.value == game.stakeWei`, sets `player2`, emits `GameJoined`
+- `cancelGame(uint256 gameId)` — creator refund path before anyone joins; plus stale-game sweep after `ABORT_TIMEOUT`
+- `claimPot(uint256 gameId)` — winner withdraws `pot` after normal WIN_HITS victory (CEI + reentrancy guard, `paidOut` flag)
+- `claimTimeoutWin` — extend existing path to transfer `pot` to claimant atomically
+- `proposeDraw(uint256 gameId)` / `withdrawDrawProposal(uint256 gameId)` — two-sided consent, both-refund on mutual agreement
+- New events: `GameJoined`, `PotPaid`, `StakeRefunded`, `DrawProposed`, `GameCanceled`
 - Per-move clock on-chain: store `lastActionTimestamp`, modify `claimTimeoutWin` to use it with a per-game clock setting
-- Deploy to Base Sepolia via a new `contracts/script/DeployBaseSepolia.s.sol`
-- Adjust foundry.toml for L2 target (no changes to solc version, just add RPC + etherscan settings)
+- Emit enriched `GameCreated(gameId, creator, opponent, clockSeconds, stakeWei)` so the lobby can index open games
+- Invariant tests (Foundry `invariant_`): `address(this).balance >= sum(activeGames.pot)`; no path reaches terminal state with unreconciled pot
+- Deploy scripts: `DeployBaseSepolia.s.sol` (dress-rehearsal) AND `DeployBaseMainnet.s.sol` (real deploy); both verify on Basescan
+- Adjust foundry.toml: add Base Sepolia + Base mainnet RPC endpoints, Basescan API keys, gas reporting on
 
 **Frontend:**
 - New `/` landing page: sign-in button, "New Game" button, "Public Games" tab, "How it works" section
 - New `/g/[gameId]` route that replaces the current single-page app as the game screen
 - `@privy-io/react-auth` integration (or Dynamic equivalent)
 - Wagmi/viem client pointed at Base Sepolia instead of local Anvil (keep local Anvil as a dev-mode fallback behind an env flag)
-- Replace burner wallet layer with Privy-provided embedded wallet
-- Add sponsored-gas send path (Alchemy Account Abstraction SDK or Privy's bundled paymaster)
+- Replace burner wallet layer with Privy-provided embedded wallet, signing straight to Base mainnet (no paymaster layer)
+- Fund-wallet panel: address QR, copy button, Coinbase Onramp widget link, balance polling, "insufficient funds" guard on Create/Join buttons
+- Stake input + validation UI at game creation; stake display everywhere the game is shown (lobby, in-game header, end screen)
+- Claim-pot / propose-draw / cancel-game buttons wired to the corresponding contract calls, with optimistic UI + confirm dialogs ("You are staking X ETH. Continue?")
 - Share-link generation + clipboard copy
 - Public games lobby component that reads `GameCreated` events via `publicClient.getLogs`
 - Per-move countdown clock with framer-motion
@@ -186,6 +213,9 @@ The local-sidecar path works for the current demo but creates a deployment probl
 | Proof | core | bytes, publicInputs[], verifierTarget | accompanies Commitment or Shot |
 | PublicGame | derived | gameId, creator, createdAt | filtered list of open Games |
 | Rematch | supporting | previousGameId, newGameId | links two Games between same Players |
+| Stake | core | amountWei, staker | belongs to Game, two per Game |
+| Pot | core | totalWei (2 * stakeWei), paidOut, payee | belongs to Game, terminal payout target |
+| DrawProposal | supporting | gameId, by, at | two-of-two consent refunds the Pot |
 
 ## Ontology Convergence
 
@@ -230,7 +260,13 @@ Converged at round 6.
 
 1. **Browser bb.js is broken, sidecar works (RESOLVED by Lane AA)** — browser bb.js 5.0.0-nightly.20260324 emits proofs that revert the HonkVerifier; Node bb.js does not. Sidecar landed with real E2E verified (6s cold / 5.5s warm / 5.3s shot). Public-deployment implications captured above — MVP ships with Option E (MockVerifier-backed preview + optional local sidecar for crypto mode).
 
-2. **Paymaster economics** — sponsoring gas for every commitBoard (which runs the HonkVerifier ~265k gas) costs real money. On Base Sepolia it's free. On Base mainnet, if 1000 players play 5 games each, that's ~$20–50 in sponsored gas at current rates. Acceptable for a demo, a budget decision for anything bigger.
+2. **Player gas costs on Base mainnet** — no sponsorship means players pay their own gas. `commitBoard` runs the HonkVerifier (~2.7M gas), which at Base mainnet ~1 gwei is ≈ $0.07 per commit. `respondShot` is another ~2.7M per shot. A full game is ~40–50 txs for both players → roughly $3–6 in gas per game at current Base mainnet prices. Document this loudly in the onboarding panel so players know what to expect.
+
+6. **Real-money safety of the escrow** — the contract holds real ETH. Must be non-upgradeable, no admin keys, no pause, CEI + reentrancy guard on all payout paths, Foundry invariant tests proving the "contract balance == sum of active pots" invariant, and fuzz tests on every state transition that touches `pot`. No protocol fee in v1 to keep logic simple. Pre-mainnet: at minimum one self-review pass + a `security-reviewer` agent pass. A real external audit is out of scope but the code should be audit-ready.
+
+7. **Stake ladder / lobby sybil** — with open stakes and an open lobby, the lobby can fill with spam 1-wei games. `MIN_STAKE` (contract-enforced) keeps this bounded; the frontend additionally sorts lobby by stake descending and can hide <MIN_STAKE games.
+
+8. **Timeout-win race on `Committed` state** — if both players' clocks expire simultaneously (neither fires the first shot), whoever calls `claimTimeoutWin` first takes the pot. This is documented as intentional, not a bug — the contract can't know who was "more at fault." Alternative (mutual-refund on double-timeout) is explicitly rejected as extra complexity for an edge case.
 
 3. **Public-games tab needs event scanning** — with no backend, the lobby reads `GameCreated` events via RPC. At 1000 games/day this is fine. At 100k games/day it needs an indexer (The Graph, Ponder, Envio). Out of scope for MVP.
 

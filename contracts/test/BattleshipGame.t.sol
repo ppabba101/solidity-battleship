@@ -60,12 +60,14 @@ contract BattleshipGameTest is Test {
     function setUp() public {
         boardVerifier = new MockVerifier();
         shotVerifier = new MockVerifier();
-        game = new BattleshipGame(address(boardVerifier), address(shotVerifier));
+        game = new BattleshipGame(address(boardVerifier), address(shotVerifier), 0);
     }
 
     function _createGame() internal returns (uint256 id) {
         vm.prank(alice);
-        id = game.createGame(bob);
+        id = game.createGame(bob, 60, 0);
+        vm.prank(bob);
+        game.joinGame(id);
     }
 
     function _commitBoth(uint256 id) internal {
@@ -282,7 +284,8 @@ contract BattleshipGameTest is Test {
         game.claimTimeoutWin(id);
 
         // Advance past the timeout and claim.
-        vm.roll(block.number + 51);
+        vm.roll(block.number + 6);
+        vm.warp(block.timestamp + 71);
         vm.prank(alice);
         game.claimTimeoutWin(id);
 
@@ -296,7 +299,8 @@ contract BattleshipGameTest is Test {
         vm.prank(alice);
         game.commitBoard(id, bytes32(uint256(0xA1)), PROOF, _pi1(bytes32(uint256(0xA1))));
         // Bob never commits.
-        vm.roll(block.number + 51);
+        vm.roll(block.number + 6);
+        vm.warp(block.timestamp + 71);
         vm.prank(alice);
         game.claimTimeoutWin(id);
         (,, BattleshipGame.GameState state,,,,,,, address winner) = game.getGame(id);

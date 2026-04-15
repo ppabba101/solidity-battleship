@@ -10,4 +10,12 @@ optimizer = true
 optimizer_runs = 1
 ffi = false
 
-remappings = ["@openzeppelin/=lib/openzeppelin-contracts/"]
+remappings = [
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "openzeppelin-contracts/=lib/openzeppelin-contracts/",
+]
+
+[invariant]
+runs = 256
+depth = 64
+fail_on_revert = false

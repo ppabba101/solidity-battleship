@@ -10,6 +10,10 @@
     "contracts:test": "forge test -C contracts",
     "deploy-local": "forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast --disable-code-size-limit -C contracts",
     "frontend:dev": "npm run dev --workspace frontend",
-    "demo": "node scripts/demo.mjs"
+    "demo": "node scripts/demo.mjs",
+    "demo:headless": "node scripts/demo-headless.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
   }
 }

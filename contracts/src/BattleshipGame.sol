@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+
 interface IZKVerifier {
     function verify(bytes calldata proof, bytes32[] calldata publicInputs) external view returns (bool);
 }
 
 /// @title BattleshipGame
-/// @notice Two-player battleship with zk-proven board legality and shot
-///         responses. Each player commits a Poseidon hash of their board; a
-///         Noir-generated Solidity verifier asserts the board has a legal
-///         fleet before play begins, so the old "commit empty board and
-///         never get hit" cheat is impossible. Per-shot responses are also
-///         proven against the committed board.
-contract BattleshipGame {
+/// @notice Two-player battleship with zk-proven board legality, shot
+///         responses, on-chain escrow, and a per-game wall-clock plus
+///         block-number timeout. Each player commits a Poseidon hash of
+///         their board; a Noir-generated Solidity verifier asserts the
+///         board has a legal fleet before play begins, so the old
+///         "commit empty board and never get hit" cheat is impossible.
+///         Per-shot responses are also proven against the committed board.
+contract BattleshipGame is ReentrancyGuard {
     enum GameState {
         Created,
         Committed,
@@ -22,24 +25,34 @@ contract BattleshipGame {
 
     uint8 public constant BOARD_SIZE = 10;
     uint8 public constant WIN_HITS = 17;
-    uint256 public constant TIMEOUT_BLOCKS = 50;
+    uint256 public constant MIN_BLOCKS_FOR_TIMEOUT = 5;
+    uint256 public constant GRACE = 10; // seconds added on top of clockSeconds
+    uint256 public constant ABORT_TIMEOUT = 1 hours;
 
     struct Game {
         address[2] players;
         bytes32[2] commitments;
         uint8[2] hitsScored; // hits that player[i] has landed on opponent
         bool[2] committed;
+        bool[2] drawProposed;
         GameState state;
         uint8 turn; // 0 or 1, index of player whose action is expected
         bool shotPending; // true if a shot has been fired and awaits response
         uint8 pendingX;
         uint8 pendingY;
         uint256 lastActionBlock;
+        uint64 lastActionAt; // block.timestamp at last state-changing action
+        uint64 createdAt; // block.timestamp at game creation
+        uint32 clockSeconds; // per-move clock
+        uint256 stakeWei; // per-player stake locked at create/join
+        uint256 pot; // total ETH escrowed (0, stakeWei, or 2*stakeWei)
+        bool paidOut; // true once pot has been paid/refunded
         address winner;
     }
 
     IZKVerifier public immutable boardVerifier;
     IZKVerifier public immutable shotVerifier;
+    uint256 public immutable minStake;
 
     uint256 public nextGameId;
     mapping(uint256 => Game) private games;
@@ -53,32 +66,72 @@ contract BattleshipGame {
     // "no double-fire" assertion and hang the frontend.
     mapping(uint256 => uint256[2]) private firedBitmap;
 
-    event GameCreated(uint256 indexed gameId, address indexed creator, address indexed opponent);
+    event GameCreated(
+        uint256 indexed gameId,
+        address indexed creator,
+        address indexed opponent,
+        uint32 clockSeconds,
+        uint256 stakeWei
+    );
+    event GameJoined(uint256 indexed gameId, address indexed player);
     event BoardCommitted(uint256 indexed gameId, address indexed player, bytes32 commitment);
     event ShotFired(uint256 indexed gameId, address indexed shooter, uint8 x, uint8 y);
     event ShotResponded(uint256 indexed gameId, address indexed responder, uint8 x, uint8 y, bool hit);
     event ShipSunk(uint256 indexed gameId, address indexed responder, uint8 shipId);
     event GameWon(uint256 indexed gameId, address indexed winner);
+    event PotPaid(uint256 indexed gameId, address indexed to, uint256 amount);
+    event StakeRefunded(uint256 indexed gameId, address indexed to, uint256 amount);
+    event DrawProposed(uint256 indexed gameId, address indexed by);
+    event DrawWithdrawn(uint256 indexed gameId, address indexed by);
+    event GameCanceled(uint256 indexed gameId);
 
-    constructor(address _boardVerifier, address _shotVerifier) {
+    constructor(address _boardVerifier, address _shotVerifier, uint256 _minStake) {
         require(_boardVerifier != address(0) && _shotVerifier != address(0), "zero verifier");
         boardVerifier = IZKVerifier(_boardVerifier);
         shotVerifier = IZKVerifier(_shotVerifier);
+        minStake = _minStake;
     }
 
     // ---------------------------------------------------------------------
     // Lifecycle
     // ---------------------------------------------------------------------
 
-    function createGame(address opponent) external returns (uint256 gameId) {
-        require(opponent != address(0) && opponent != msg.sender, "bad opponent");
+    function createGame(address opponent, uint32 clockSeconds, uint256 stakeWei)
+        external
+        payable
+        returns (uint256 gameId)
+    {
+        require(opponent != msg.sender, "bad opponent");
+        require(stakeWei >= minStake, "stake below min");
+        require(msg.value == stakeWei, "value mismatch");
+        require(clockSeconds > 0, "clock zero");
+
         gameId = nextGameId++;
         Game storage g = games[gameId];
         g.players[0] = msg.sender;
-        g.players[1] = opponent;
+        g.players[1] = opponent; // address(0) means open game
         g.state = GameState.Created;
         g.lastActionBlock = block.number;
-        emit GameCreated(gameId, msg.sender, opponent);
+        g.lastActionAt = uint64(block.timestamp);
+        g.createdAt = uint64(block.timestamp);
+        g.clockSeconds = clockSeconds;
+        g.stakeWei = stakeWei;
+        g.pot = stakeWei;
+        emit GameCreated(gameId, msg.sender, opponent, clockSeconds, stakeWei);
+    }
+
+    function joinGame(uint256 gameId) external payable {
+        Game storage g = games[gameId];
+        require(g.state == GameState.Created, "bad state");
+        require(g.players[0] != msg.sender, "creator cannot join");
+        require(g.players[1] == address(0) || g.players[1] == msg.sender, "not invited");
+        require(msg.value == g.stakeWei, "value mismatch");
+
+        g.players[1] = msg.sender;
+        g.pot = g.stakeWei * 2;
+        g.lastActionBlock = block.number;
+        g.lastActionAt = uint64(block.timestamp);
+        emit GameJoined(gameId, msg.sender);
     }
 
     function commitBoard(
@@ -89,6 +142,7 @@ contract BattleshipGame {
     ) external {
         Game storage g = games[gameId];
         require(g.state == GameState.Created || g.state == GameState.Committed, "bad state");
+        require(g.players[1] != address(0), "no opponent");
         uint8 idx = _playerIndex(g, msg.sender);
         require(!g.committed[idx], "already committed");
 
@@ -110,6 +164,7 @@ contract BattleshipGame {
             g.state = GameState.Committed;
         }
         g.lastActionBlock = block.number;
+        g.lastActionAt = uint64(block.timestamp);
     }
 
     // ---------------------------------------------------------------------
@@ -133,13 +188,10 @@ contract BattleshipGame {
         g.pendingX = x;
         g.pendingY = y;
         g.lastActionBlock = block.number;
+        g.lastActionAt = uint64(block.timestamp);
         emit ShotFired(gameId, msg.sender, x, y);
     }
 
-    // Validates the shot publicInputs against trusted game state and returns
-    // the sunk_ship_id public output. Split out of respondShot to avoid Solidity
-    // "stack too deep" with the 113-slot publicInputs array.
-    //
     // publicInputs layout (all bytes32):
     //   [0]        commitment
     //   [1]        x
@@ -204,6 +256,7 @@ contract BattleshipGame {
                 g.winner = g.players[shooter];
                 g.shotPending = false;
                 g.lastActionBlock = block.number;
+                g.lastActionAt = uint64(block.timestamp);
                 emit GameWon(gameId, g.winner);
                 return;
             }
@@ -214,14 +267,73 @@ contract BattleshipGame {
 
         g.shotPending = false;
         g.lastActionBlock = block.number;
+        g.lastActionAt = uint64(block.timestamp);
+    }
+
+    // ---------------------------------------------------------------------
+    // Escrow / lifecycle exits
+    // ---------------------------------------------------------------------
+
+    /// @notice Creator can cancel an unjoined game. Anyone can sweep an
+    ///         abandoned unjoined game after `ABORT_TIMEOUT` seconds.
+    function cancelGame(uint256 gameId) external nonReentrant {
+        Game storage g = games[gameId];
+        require(g.state == GameState.Created, "bad state");
+        // "joined" = pot has both stakes locked. Until joinGame runs the
+        // pot equals the creator's single stake (which may be 0).
+        require(g.pot <= g.stakeWei, "already joined");
+        bool isCreator = msg.sender == g.players[0];
+        bool stale = block.timestamp >= uint256(g.createdAt) + ABORT_TIMEOUT;
+        require(isCreator || stale, "not creator or not stale");
+
+        uint256 refund = g.pot;
+        address creator = g.players[0];
+        g.state = GameState.Finished;
+        g.pot = 0;
+        g.paidOut = true;
+        g.lastActionBlock = block.number;
+        g.lastActionAt = uint64(block.timestamp);
+        emit GameCanceled(gameId);
+
+        if (refund > 0) {
+            (bool ok,) = creator.call{value: refund}("");
+            require(ok, "refund failed");
+            emit StakeRefunded(gameId, creator, refund);
+        }
+    }
+
+    /// @notice Winner of a normally-finished game collects the pot.
+    function claimPot(uint256 gameId) external nonReentrant {
+        Game storage g = games[gameId];
+        require(g.state == GameState.Finished, "not finished");
+        require(!g.paidOut, "already paid");
+        require(msg.sender == g.winner, "not winner");
+
+        uint256 amount = g.pot;
+        address to = g.winner;
+        g.pot = 0;
+        g.paidOut = true;
+        emit PotPaid(gameId, to, amount);
+
+        if (amount > 0) {
+            (bool ok,) = to.call{value: amount}("");
+            require(ok, "payout failed");
+        }
     }
 
     /// @notice If the player whose action is currently expected has missed
-    ///         the timeout window, the other player wins by default.
-    function claimTimeoutWin(uint256 gameId) external {
+    ///         the timeout window, the other player wins by default and
+    ///         atomically receives the pot. Requires both a wall-clock
+    ///         witness and a minimum block-number gap to defend against
+    ///         single-source skew.
+    function claimTimeoutWin(uint256 gameId) external nonReentrant {
         Game storage g = games[gameId];
         require(g.state == GameState.Playing || g.state == GameState.Committed, "bad state");
-        require(block.number > g.lastActionBlock + TIMEOUT_BLOCKS, "too early");
+        require(
+            block.timestamp >= uint256(g.lastActionAt) + uint256(g.clockSeconds) + GRACE,
+            "too early"
+        );
+        require(block.number >= g.lastActionBlock + MIN_BLOCKS_FOR_TIMEOUT, "too few blocks");
 
         address laggard;
         if (g.state == GameState.Playing) {
@@ -238,7 +350,61 @@ contract BattleshipGame {
 
         g.state = GameState.Finished;
         g.winner = msg.sender;
+        g.lastActionBlock = block.number;
+        g.lastActionAt = uint64(block.timestamp);
         emit GameWon(gameId, msg.sender);
+
+        uint256 amount = g.pot;
+        if (amount > 0 && !g.paidOut) {
+            g.pot = 0;
+            g.paidOut = true;
+            emit PotPaid(gameId, msg.sender, amount);
+            (bool ok,) = msg.sender.call{value: amount}("");
+            require(ok, "payout failed");
+        }
+    }
+
+    /// @notice Either player may propose a draw during Committed or Playing.
+    ///         When both have proposed, the pot is refunded 50/50 atomically.
+    function proposeDraw(uint256 gameId) external nonReentrant {
+        Game storage g = games[gameId];
+        require(g.state == GameState.Committed || g.state == GameState.Playing, "bad state");
+        uint8 idx = _playerIndex(g, msg.sender);
+        require(!g.drawProposed[idx], "already proposed");
+        g.drawProposed[idx] = true;
+        emit DrawProposed(gameId, msg.sender);
+
+        if (g.drawProposed[0] && g.drawProposed[1]) {
+            uint256 stake = g.stakeWei;
+            address p0 = g.players[0];
+            address p1 = g.players[1];
+            g.state = GameState.Finished;
+            g.winner = address(0);
+            g.pot = 0;
+            g.paidOut = true;
+            g.lastActionBlock = block.number;
+            g.lastActionAt = uint64(block.timestamp);
+
+            if (stake > 0) {
+                (bool ok0,) = p0.call{value: stake}("");
+                require(ok0, "refund0 failed");
+                emit StakeRefunded(gameId, p0, stake);
+                (bool ok1,) = p1.call{value: stake}("");
+                require(ok1, "refund1 failed");
+                emit StakeRefunded(gameId, p1, stake);
+            }
+        }
+    }
+
+    /// @notice Withdraw a previously-proposed draw flag. Only allowed if
+    ///         the draw has not already been finalized.
+    function withdrawDrawProposal(uint256 gameId) external {
+        Game storage g = games[gameId];
+        uint8 idx = _playerIndex(g, msg.sender); // reverts "not player"
+        require(g.state == GameState.Committed || g.state == GameState.Playing, "bad state");
+        require(g.drawProposed[idx], "no proposal");
+        g.drawProposed[idx] = false;
+        emit DrawWithdrawn(gameId, msg.sender);
     }
 
     // ---------------------------------------------------------------------
@@ -273,6 +439,33 @@ contract BattleshipGame {
             g.hitsScored[0],
             g.hitsScored[1],
             g.winner
+        );
+    }
+
+    function getGameEscrow(uint256 gameId)
+        external
+        view
+        returns (
+            uint256 stakeWei,
+            uint256 pot,
+            bool paidOut,
+            uint32 clockSeconds,
+            uint64 lastActionAt,
+            uint64 createdAt,
+            bool drawProposed0,
+            bool drawProposed1
+        )
+    {
+        Game storage g = games[gameId];
+        return (
+            g.stakeWei,
+            g.pot,
+            g.paidOut,
+            g.clockSeconds,
+            g.lastActionAt,
+            g.createdAt,
+            g.drawProposed[0],
+            g.drawProposed[1]
         );
     }
 

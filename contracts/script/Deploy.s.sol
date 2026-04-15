@@ -25,7 +25,8 @@ contract Deploy is Script {
             shotVerifier = address(new ShotResponseVerifier());
             console.log("Deploying with REAL verifiers (HonkVerifier)");
         }
-        game = new BattleshipGame(boardVerifier, shotVerifier);
+        uint256 minStake = vm.envOr("MIN_STAKE", uint256(0));
+        game = new BattleshipGame(boardVerifier, shotVerifier, minStake);
         vm.stopBroadcast();
         console.log("BattleshipGame deployed at:", address(game));
     }
